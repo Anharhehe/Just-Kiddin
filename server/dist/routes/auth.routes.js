@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_controller_1 = require("../controllers/auth.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const async_handler_1 = require("../utils/async-handler");
+const authRouter = (0, express_1.Router)();
+authRouter.post("/register", (0, async_handler_1.asyncHandler)(auth_controller_1.registerWithEmail));
+authRouter.post("/login", (0, async_handler_1.asyncHandler)(auth_controller_1.loginWithEmail));
+authRouter.get("/google", (0, async_handler_1.asyncHandler)(auth_controller_1.loginWithGoogle));
+authRouter.get("/google/callback", (0, async_handler_1.asyncHandler)(auth_controller_1.googleCallback));
+authRouter.get("/me", auth_middleware_1.requireAuth, (0, async_handler_1.asyncHandler)(auth_controller_1.getCurrentUser));
+authRouter.patch("/me", auth_middleware_1.requireAuth, (0, async_handler_1.asyncHandler)(auth_controller_1.updateCurrentUser));
+authRouter.delete("/me", auth_middleware_1.requireAuth, (0, async_handler_1.asyncHandler)(auth_controller_1.deleteCurrentUser));
+authRouter.post("/logout", (0, async_handler_1.asyncHandler)(auth_controller_1.logout));
+exports.default = authRouter;

@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ContactQueryStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String?
+  fullName     String?
+  avatarUrl    String?
+  authProvider AuthProvider @default(EMAIL)
+  googleId     String?      @unique
+  role         Role         @default(USER)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  favourites   Favourite[]
+}
+
+model Favourite {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String   // matches the id field in demo.ts
+  name      String
+  price     Int
+  image     String
+  category  String
+  ageGroup  String
+  gender    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model ContactQuery {
+  id        String             @id @default(cuid())
+  name      String
+  email     String
+  mobile    String
+  subject   String
+  message   String
+  status    ContactQueryStatus @default(NEW)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model CustomerOrder {
+  id             String   @id @default(cuid())
+  fullName       String
+  email          String
+  mobile         String
+  address        String
+  city           String
+  postalCode     String?
+  notes          String?
+  paymentMethod  String   @default("COD")
+  promoCode      String?
+  subtotal       Int
+  discountAmount Int      @default(0)
+  deliveryCharge Int      @default(300)
+  totalAmount    Int
+  itemsJson      Json
+  status         String   @default("PENDING")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
