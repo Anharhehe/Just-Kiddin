@@ -1,0 +1,93 @@
+@import url("https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700;800&display=swap");
+@import "tailwindcss";
+
+/* =============================================
+   BRAND DESIGN SYSTEM — Just Kidin'
+   ============================================= */
+
+/* Light Mode (default) */
+:root {
+  /* === Hero Brand Colors === */
+  --hot-pink:        #F3587A;
+  --sky-blue:        #5CCCF0;
+  --balloon-green:   #7FCF3E;
+  --sunny-yellow:    #FFD93D;
+
+  /* === Soft Tints (backgrounds / cards) === */
+  --blush:           #FDE8ED;
+  --mist:            #E4F7FD;
+  --mint-foam:       #EBF8D8;
+
+  /* === Semantic Tokens — Light Mode === */
+  --background:      #ffffff;
+  --foreground:      #222222;
+  --primary:         #F3587A;   /* Hot Pink  — main CTA / buttons */
+  --secondary:       #5CCCF0;   /* Sky Blue  — links / highlights */
+  --accent:          #7FCF3E;   /* Balloon Green */
+  --highlight:       #FFD93D;   /* Sunny Yellow — sale / badge */
+  --card-bg:         #ffffff;
+  --card-border:     #F0F0F0;
+  --muted:           #888888;
+}
+
+/* Dark Mode — toggled via .dark class on <html> */
+.dark {
+  --background:    #1A1A2E;   /* deep navy — soft & branded */
+  --foreground:    #F0F0F0;
+  --primary:       #F3587A;   /* Hot Pink — unchanged */
+  --secondary:     #5CD6FF;   /* Electric Blue — brighter for dark */
+  --accent:        #8FDF4A;   /* Neon Green — pops on dark */
+  --highlight:     #FFD93D;
+  --card-bg:       #252540;
+  --card-border:   #3A3A5C;
+  --muted:         #AAAAAA;
+}
+
+/* Register all tokens with Tailwind v4 */
+@theme inline {
+  --color-background:    var(--background);
+  --color-foreground:    var(--foreground);
+  --color-primary:       var(--primary);
+  --color-secondary:     var(--secondary);
+  --color-accent:        var(--accent);
+  --color-highlight:     var(--highlight);
+  --color-hot-pink:      var(--hot-pink);
+  --color-sky-blue:      var(--sky-blue);
+  --color-balloon-green: var(--balloon-green);
+  --color-sunny-yellow:  var(--sunny-yellow);
+  --color-blush:         var(--blush);
+  --color-mist:          var(--mist);
+  --color-mint-foam:     var(--mint-foam);
+  --color-card-bg:       var(--card-bg);
+  --color-card-border:   var(--card-border);
+  --color-muted:         var(--muted);
+
+  --font-heading:        "Quicksand", sans-serif;
+  --font-body:           "Quicksand", sans-serif;
+}
+
+/* Base styles */
+html,
+body,
+button,
+input,
+textarea,
+select {
+  font-family: "Quicksand", sans-serif !important;
+}
+
+body {
+  margin: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "Quicksand", sans-serif;
+}
+
+button {
+  cursor: pointer;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Quicksand", sans-serif;
+  font-weight: 700;
+}
