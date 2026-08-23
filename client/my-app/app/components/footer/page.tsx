@@ -43,10 +43,10 @@ export default function Footer() {
   const [error, setError] = useState("");
 
   const footerBg = SOFT_TEAL;
-  const cardBg = isDark ? "#0F2540" : WARM_IVORY;
-  const borderColor = isDark ? "#1B3A5C" : "#E3DCCB";
-  const textColor = isDark ? WARM_IVORY : DEEP_NAVY;
-  const mutedText = isDark ? "#CFE3E0" : "#2C4A63";
+  const cardBg = WARM_IVORY;
+  const borderColor = "#E3DCCB";
+  const textColor = DEEP_NAVY;
+  const mutedText = "#2C4A63";
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,7 +122,7 @@ export default function Footer() {
             </h3>
             <p
               className="mt-4 text-sm sm:text-base leading-7 max-w-sm"
-              style={{ color: isDark ? mutedText : DEEP_NAVY }}
+              style={{ color: mutedText }}
             >
               We bring comfy, stylish, and quality clothing for infants, babies,
               and growing children, designed for everyday joy and easy parenting.
@@ -161,7 +161,7 @@ export default function Footer() {
           <section className="w-full">
             <h4
               className="text-xl font-semibold"
-              style={{ fontFamily: "'Quicksand', sans-serif", color: isDark ? textColor : DEEP_NAVY }}
+              style={{ fontFamily: "'Quicksand', sans-serif", color: DEEP_NAVY }}
             >
               Quick Links
             </h4>
@@ -171,7 +171,7 @@ export default function Footer() {
                   key={link.href}
                   href={link.href}
                   className="text-sm sm:text-base w-fit cursor-pointer transition-all duration-200 hover:underline"
-                  style={{ color: isDark ? mutedText : DEEP_NAVY, fontFamily: "'Quicksand', sans-serif" }}
+                  style={{ color: mutedText, fontFamily: "'Quicksand', sans-serif" }}
                 >
                   {link.label}
                 </Link>
@@ -182,13 +182,13 @@ export default function Footer() {
           <section>
             <h4
               className="text-xl font-semibold"
-              style={{ fontFamily: "'Quicksand', sans-serif", color: isDark ? textColor : DEEP_NAVY }}
+              style={{ fontFamily: "'Quicksand', sans-serif", color: DEEP_NAVY }}
             >
               Stay in the Loop
             </h4>
             <p
               className="mt-4 text-sm sm:text-base leading-7 max-w-md"
-              style={{ color: isDark ? mutedText : DEEP_NAVY }}
+              style={{ color: mutedText }}
             >
               Sign up to get first dibs on new arrivals, sales, exclusive
               content, events and more.
@@ -209,7 +209,7 @@ export default function Footer() {
                   placeholder="Enter email address"
                   className="h-12 sm:h-11 min-w-0 w-full px-4 rounded-md text-base outline-none placeholder:text-[15px]"
                   style={{
-                    background: isDark ? "#132C4A" : "#ffffff",
+                    background: "#ffffff",
                     color: DEEP_NAVY,
                     border: `1px solid ${borderColor}`,
                   }}
@@ -232,7 +232,7 @@ export default function Footer() {
                 <div
                   className="mt-3 flex items-center gap-2 text-sm rounded-md px-3 py-2"
                   style={{
-                    background: isDark ? "#0F2540" : "#EAF7EF",
+                    background: "#EAF7EF",
                     color: GREEN,
                     border: `1px solid ${GREEN}`,
                   }}
@@ -245,7 +245,7 @@ export default function Footer() {
                 <div
                   className="mt-3 text-sm rounded-md px-3 py-2"
                   style={{
-                    background: isDark ? "#0F2540" : "#FDEAE7",
+                    background: "#FDEAE7",
                     color: CORAL,
                     border: `1px solid ${CORAL}`,
                   }}
@@ -261,7 +261,7 @@ export default function Footer() {
           className="mt-10 pt-5 text-xs text-center"
           style={{
             borderTop: `1px solid ${borderColor}`,
-            color: isDark ? mutedText : DEEP_NAVY,
+            color: mutedText,
           }}
         >
           © {new Date().getFullYear()} Just Kiddin. All rights reserved.
