@@ -9,6 +9,8 @@ import apiRouter from "./routes";
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 const allowedOrigins = env.CORS_ORIGIN.split(",").map((origin) => origin.trim()).filter(Boolean);
 
 app.use(helmet());
