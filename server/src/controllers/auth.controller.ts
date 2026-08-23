@@ -61,7 +61,12 @@ const GOOGLE_STATE_COOKIE = "jk_google_oauth_state";
 const GOOGLE_VERIFIER_COOKIE = "jk_google_code_verifier";
 
 function getFrontendOrigin() {
-  return env.CORS_ORIGIN.replace(/\/$/, "");
+  const [primaryOrigin] = env.CORS_ORIGIN
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return (primaryOrigin ?? "http://localhost:3000").replace(/\/$/, "");
 }
 
 function getGoogleRedirectUri(req: Request) {
