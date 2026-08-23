@@ -246,6 +246,11 @@ export default function ProfilePage() {
           return;
         }
 
+        if (currentUser.role === "ADMIN") {
+          router.replace("/admin");
+          return;
+        }
+
         if (!cancelled) {
           setUser(currentUser);
           setFullName(currentUser.fullName ?? "");

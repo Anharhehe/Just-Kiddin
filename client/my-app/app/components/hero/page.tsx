@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronDown, Heart } from "lucide-react";
 import { products as demoProducts, type Product } from "../../data/demo";
 import { useFavourites } from "../../hooks/useFavourites";
+import { getProductImage } from "../../utils/product-image";
 
 interface HeroProps {
   onSelectNewborns: () => void;
@@ -17,15 +18,25 @@ const FONT_HEADING = "'Quicksand', sans-serif";
 export default function Hero({ onSelectNewborns, onSelectToddlers }: HeroProps) {
   return (
     <section className="relative w-full overflow-x-hidden" style={{ fontFamily: FONT_HEADING }}>
-      {/* Background photo band - covers almost the whole front page, content layered on top */}
-      <div className="relative flex min-h-[88vh] w-full flex-col justify-center sm:min-h-[92vh]">
+      {/* Background photo band - 65vh on mobile, original 92vh on desktop */}
+      <div className="relative flex min-h-[65vh] w-full flex-col justify-center sm:min-h-[92vh]">
+        {/* Mobile background */}
         <Image
           src="/hero.jpg"
           alt="Hero background"
           fill
           priority
           sizes="100vw"
-          className="object-cover"
+          className="object-cover sm:hidden"
+        />
+        {/* Desktop background - unchanged */}
+        <Image
+          src="/hero.png"
+          alt="Hero background"
+          fill
+          priority
+          sizes="100vw"
+          className="hidden object-cover sm:block"
         />
         {/* soft overlay so text/buttons stay legible over the photo */}
         <div className="absolute inset-0 bg-white/40" />
@@ -66,85 +77,53 @@ function HeroBody({ onSelectNewborns, onSelectToddlers }: HeroProps) {
   const display = { fontFamily: FONT_HEADING };
 
   return (
-    <div className="relative z-10 mx-auto max-w-7xl px-6 pb-6 pt-8 sm:px-10 sm:pt-10" style={body}>
-      <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
-        {/* Left: copy */}
-        <div className="relative lg:-ml-4 xl:-ml-6">
-          <p
-            className="flex items-center gap-2 text-sm font-bold tracking-wide text-[#E8735F] sm:text-base"
-            style={body}
-          >
-            MADE FOR LITTLE MOMENTS <HeartIcon className="h-3.5 w-3.5" />
-          </p>
-
-          <h2
-            className="mt-3 text-[2.7rem] font-extrabold leading-[1.1] sm:text-5xl lg:text-6xl"
-            style={{ ...display, color: "#293A55" }}
-          >
+    <div
+      className="relative z-10 mx-auto flex max-w-2xl flex-col items-center px-6 pb-6 pt-8 text-center sm:px-10 sm:pt-10"
+      style={body}
+    >
+      {/* mobile: no offset, content centers naturally in the 65vh band */}
+      {/* desktop: original -mt-40 restored, same as before */}
+      <div className="mx-auto flex w-full flex-col items-center sm:-mt-40">
+        <h2
+          className="text-[8vw] font-extrabold leading-[1.15] xs:text-[7.5vw] sm:text-5xl lg:text-6xl"
+          style={{ ...display, color: "#293A55" }}
+        >
+          <span className="block whitespace-nowrap">
             Softness they <span style={{ color: "#E8735F" }}>love.</span>
-            <br />
+          </span>
+          <span className="mt-1 block whitespace-nowrap">
             Quality you{" "}
             <span className="italic" style={{ color: "#7FA08D" }}>
               trust.
             </span>
-          </h2>
+          </span>
+        </h2>
 
-          <p className="mt-4 max-w-md text-base text-[#6B7280] sm:text-lg" style={body}>
-            Thoughtfully made clothing for newborns to 5 years, for every little moment.
-          </p>
+        <p className="mt-4 max-w-md text-base text-[#6B7280] sm:text-lg" style={body}>
+          Thoughtfully made clothing for newborns to 5 years, for every little moment.
+        </p>
 
-          <div className="mt-7 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={onSelectNewborns}
-              className="flex cursor-pointer items-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:text-base"
-              style={{ background: "#E8735F", ...body }}
-            >
-              Shop Newborns
-              <ArrowIcon className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={onSelectToddlers}
-              className="flex cursor-pointer items-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:text-base"
-              style={{ background: "#7FA08D", ...body }}
-            >
-              Shop Toddlers
-              <ArrowIcon className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* dotted line: left-border wave ending in dotted heart */}
-          <div
-            className="relative mt-6 h-12 w-1/2 min-w-[16rem] max-w-full"
-            style={{ marginLeft: "calc(-50vw + 50%)" }}
+        {/* buttons: bigger on mobile, original size restored from sm: up */}
+        <div className="mt-7 flex flex-wrap justify-center gap-4 sm:gap-3">
+          <button
+            type="button"
+            onClick={onSelectNewborns}
+            className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-base font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:px-6 sm:py-3.5 sm:text-base"
+            style={{ background: "#E8735F", ...body }}
           >
-            <svg
-              className="absolute left-0 h-12 w-full text-[#E8B4A8]"
-              viewBox="0 0 880 48"
-              fill="none"
-              preserveAspectRatio="none"
-            >
-              <path
-                d="M0 24 C120 40, 210 8, 300 24 C390 40, 480 8, 570 24 C660 40, 740 12, 820 24"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeDasharray="3 8"
-                strokeLinecap="round"
-                fill="none"
-              />
-              <path
-                d="M845 21 C835 6, 810 10, 810 25 C810 36, 820 43, 845 52 C870 43, 880 36, 880 25 C880 10, 855 6, 845 21 Z"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeDasharray="3 8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-            </svg>
-          </div>
+            Shop Newborns
+            <ArrowIcon className="h-5 w-5 sm:h-4 sm:w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onSelectToddlers}
+            className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-base font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:px-6 sm:py-3.5 sm:text-base"
+            style={{ background: "#7FA08D", ...body }}
+          >
+            Shop Toddlers
+            <ArrowIcon className="h-5 w-5 sm:h-4 sm:w-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -299,7 +278,6 @@ function FeaturedProducts() {
           <h2 className="mt-3 text-3xl font-extrabold leading-[1.15] text-[#293A55] sm:text-4xl lg:text-5xl">
             Our hot sellers from the collection.
           </h2>
-          
         </div>
 
         <button
@@ -313,7 +291,6 @@ function FeaturedProducts() {
       </div>
 
       <div className="mt-8 flex items-center justify-between gap-3 border-b border-[#E6D9C4] pb-4">
-        
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7FA08D]">
           Newborns + Toddlers
         </p>
@@ -322,10 +299,10 @@ function FeaturedProducts() {
       <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {visibleProducts.map((product) => {
           const liked = favouriteIds.has(product.id);
-          const imageSrc = Array.isArray(product.image) ? product.image[0] ?? "/demo.png" : product.image;
+          const imageSrc = getProductImage(product);
           const ageSegment = product.ageGroup === "newborn" ? "newborns" : "toddlers";
-          const genderSegment = product.gender === "boy" ? "boys" : "girls";
-          const categorySlug = product.tags.find((tag) => tag !== product.ageGroup && tag !== product.gender) ?? product.category.toLowerCase().replace(/\s+/g, "-");
+          const genderSegment = product.gender === "boy" ? "boys" : product.gender === "girl" ? "girls" : "accessories";
+          const categorySlug = product.tags.find((tag) => tag !== product.ageGroup && tag !== product.gender) ?? (product.category ?? "accessories").toLowerCase().replace(/\s+/g, "-");
 
           return (
             <Link
@@ -384,14 +361,14 @@ function FeaturedProducts() {
 
 /* -------------------------------- Top Sellers ------------------------------ */
 
-interface Product {
+interface TopSellerProduct {
   name: string;
   price: string;
   seed: string;
   bg: string;
 }
 
-const PRODUCTS: Product[] = [
+const PRODUCTS: TopSellerProduct[] = [
   { name: "Cozy Cloud Onesie", price: "$24.00", seed: "baby-onesie-1", bg: "#DCEEE3" },
   { name: "Little Star Romper", price: "$28.00", seed: "baby-romper-2", bg: "#FBDAD3" },
   { name: "Soft Knit Cardigan", price: "$32.00", seed: "baby-cardigan-3", bg: "#FCEACD" },
@@ -445,7 +422,7 @@ function TopSellers() {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product }: { product: TopSellerProduct }) {
   return (
     <div className="group flex flex-col overflow-hidden rounded-3xl bg-white shadow-[0_16px_40px_rgba(0,0,0,0.06)] transition-transform hover:-translate-y-1">
       <div

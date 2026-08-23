@@ -2,28 +2,11 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import {
-  Heart,
-  ChevronDown,
-  ChevronUp,
-  Baby,
-  Moon,
-  Layers,
-  Bed,
-  Hand,
-  Crown,
-  Shirt,
-  Footprints,
-  LayoutGrid,
-  Snowflake,
-  Droplet,
-  CircleDot,
-  Package,
-  Gift,
-} from "lucide-react";
-import { products as demoProducts } from "../data/demo";
+import { useEffect, useMemo, useState } from "react";
+import { Heart, ChevronDown } from "lucide-react";
+import type { Product } from "../data/demo";
 import { useFavourites } from "../hooks/useFavourites";
+import { getProductImage } from "../utils/product-image";
 
 /* ------------------------------------------------------------------ */
 /*  Types & static config                                             */
@@ -34,35 +17,33 @@ type Gender = "boys" | "girls";
 type Category = {
   slug: string;
   label: string;
-  icon: React.ElementType;
-  iconBg: string;
-  iconColor: string;
+  image: string;
 };
 
-const FONT_HEADING = "'Baloo 2', cursive";
+const FONT_HEADING = "'Quicksand', sans-serif";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 
 const CATEGORIES: Category[] = [
-  { slug: "bodysuits", label: "Bodysuits", icon: Baby, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
-  { slug: "sleepsuits", label: "Sleepsuits", icon: Moon, iconBg: "bg-indigo-100", iconColor: "text-indigo-600" },
-  { slug: "swaddles", label: "Swaddles", icon: Layers, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  { slug: "blankets", label: "Blankets", icon: Bed, iconBg: "bg-rose-100", iconColor: "text-rose-600" },
-  { slug: "mittens", label: "Mittens", icon: Hand, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  { slug: "caps", label: "Caps", icon: Crown, iconBg: "bg-yellow-100", iconColor: "text-yellow-600" },
-  { slug: "zippers", label: "Zippers", icon: Shirt, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  { slug: "footed-rompers", label: "Footed Rompers", icon: Footprints, iconBg: "bg-teal-100", iconColor: "text-teal-600" },
-  { slug: "knit-sets", label: "Knit Sets", icon: LayoutGrid, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  { slug: "thermal-sets", label: "Thermal Sets", icon: Snowflake, iconBg: "bg-cyan-100", iconColor: "text-cyan-600" },
-  { slug: "jackets", label: "Jackets", icon: Shirt, iconBg: "bg-red-100", iconColor: "text-red-600" },
-  { slug: "bibs", label: "Bibs", icon: Droplet, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
-  { slug: "headbands", label: "Headbands", icon: CircleDot, iconBg: "bg-lime-100", iconColor: "text-lime-600" },
-  { slug: "sleeping-bags", label: "Sleeping Bags", icon: Package, iconBg: "bg-fuchsia-100", iconColor: "text-fuchsia-600" },
-  { slug: "receiving-blankets", label: "Receiving Blankets", icon: Gift, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+  { slug: "rompers", label: "Rompers", image: "/demo.png" },
+  { slug: "bodysuits", label: "Bodysuits", image: "/demo.png" },
+  { slug: "newborn-starter-sets", label: "Newborn Starter sets", image: "/demo.png" },
+  { slug: "thermals", label: "Thermals", image: "/demo.png" },
+  { slug: "gift-sets", label: "Gift sets", image: "/demo.png" },
+  { slug: "knitwears", label: "Knitwears", image: "/demo.png" },
+  { slug: "sets-suits", label: "Sets & suits", image: "/demo.png" },
+  { slug: "infant-essentials", label: "infant essentials", image: "/demo.png" },
 ];
-
-const SIZES = ["0-6M", "6-12M", "1-2Y", "2-3Y", "3-4Y"];
 
 // Tight, consistent page gutter reused across every section
 const CONTAINER = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
+
+function categorySlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
@@ -70,249 +51,289 @@ const CONTAINER = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
 
 export default function NewbornsPage() {
   const [gender, setGender] = useState<Gender>("boys");
-  const [activeCategory, setActiveCategory] = useState<string>("bodysuits");
-  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>(CATEGORIES[0].slug);
   const [sortBy, setSortBy] = useState("Newest");
-  const [categoryOpen, setCategoryOpen] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { favouriteIds, toggle: toggleFav } = useFavourites();
 
   // demo.ts uses "boy"/"girl", page state uses "boys"/"girls"
   const genderKey = gender === "boys" ? "boy" : "girl";
 
-  const products = useMemo(() => {
-    let filtered = demoProducts.filter(
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadProducts() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/products?ageGroup=newborn&gender=${genderKey}`,
+          { signal: controller.signal }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to load products");
+        }
+
+        const payload = (await response.json()) as { data?: { products?: Product[] } };
+        if (!controller.signal.aborted) {
+          setProducts(payload.data?.products ?? []);
+        }
+      } catch (fetchError) {
+        if (!controller.signal.aborted) {
+          setError(fetchError instanceof Error ? fetchError.message : "Failed to load products");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadProducts();
+
+    return () => {
+      controller.abort();
+    };
+  }, [genderKey]);
+
+  const visibleProducts = useMemo(() => {
+    const activeCategoryLabel = CATEGORIES.find((category) => category.slug === activeCategory)?.label ?? "";
+
+    let filtered = products.filter(
       (p) =>
         p.ageGroup === "newborn" &&
         p.gender === genderKey &&
-        p.tags.includes(activeCategory)
+        (p.category ? categorySlug(p.category) === activeCategory : false) &&
+        (activeCategoryLabel ? (p.category ?? "").trim().toLowerCase() === activeCategoryLabel.trim().toLowerCase() : true)
     );
-
-    if (selectedSizes.length > 0) {
-      filtered = filtered.filter((p) =>
-        p.sizes.some((s) => selectedSizes.includes(s))
-      );
-    }
 
     if (sortBy === "Price: Low to High") return [...filtered].sort((a, b) => a.price - b.price);
     if (sortBy === "Price: High to Low") return [...filtered].sort((a, b) => b.price - a.price);
     return filtered;
-  }, [activeCategory, gender, genderKey, selectedSizes, sortBy]);
-
-  // Counts per category (for the sidebar checkbox labels), scoped to current gender/age
-  const categoryCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    CATEGORIES.forEach((cat) => {
-      map[cat.slug] = demoProducts.filter(
-        (p) => p.ageGroup === "newborn" && p.gender === genderKey && p.tags.includes(cat.slug)
-      ).length;
-    });
-    return map;
-  }, [genderKey]);
-
-  const toggleSize = (size: string) => {
-    setSelectedSizes((prev) =>
-      prev.includes(size) ? prev.filter((s) => s !== size) : [...prev, size]
-    );
-  };
+  }, [activeCategory, genderKey, products, sortBy]);
 
   return (
-    <div className="min-h-screen bg-[#FBF2E9]" style={{ fontFamily: FONT_HEADING }}>
-      {/* ---------------------------------------------------------- */}
-      {/*  Hero                                                       */}
-      {/* ---------------------------------------------------------- */}
-      <div className={`relative ${CONTAINER} pb-12 pt-10`}>
-        <nav className="mb-6 text-sm text-[#9a8f7f]">
-          <span>Home</span>
-          <span className="mx-2">›</span>
-          <span className="text-[#3d372c]">Newborns</span>
-        </nav>
+    <div className="min-h-screen bg-[#0000]" style={{ fontFamily: FONT_HEADING }}>
 
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:items-center">
-          <div>
-            <h1 className="flex items-center gap-3 text-4xl font-extrabold text-[#293A55] sm:text-5xl">
-              Newborns
-              <Heart className="h-8 w-8 fill-red-500 text-red-500" />
-            </h1>
-            <p className="mt-3 max-w-md text-[#8a8071]">
-              Gentle, soft and made with love for new beginnings.
-            </p>
+      {/* ---------------------------------------------------------- */}
+      {/*  Category strip — DESKTOP: circular avatars, unchanged       */}
+      {/* ---------------------------------------------------------- */}
+      <div className="hidden rounded-t-[2.5rem] border-b border-[#E6D9C4] bg-gradient-to-b from-[#F8ECDD] to-[#FBF2E9] md:block">
+        <div className={`${CONTAINER} py-8`}>
+          <div className="flex flex-wrap justify-center gap-x-8 gap-y-6 py-3">
+            {CATEGORIES.map((cat) => {
+              const active = cat.slug === activeCategory;
 
-            {/* Gender toggle */}
-            <div className="mt-6 inline-flex rounded-full border border-[#e6ddcd] bg-white p-1">
+              return (
+                <button
+                  key={cat.slug}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.slug)}
+                  className="flex shrink-0 cursor-pointer flex-col items-center gap-3"
+                >
+                  <span
+                    className={`flex h-20 w-20 overflow-hidden rounded-full border-2 bg-white shadow-[0_12px_26px_rgba(41,58,85,0.12)] transition-all ${
+                      active ? "border-[#293A55] ring-2 ring-[#293A55]/20 ring-offset-2" : "border-[#efe0cf]"
+                    }`}
+                  >
+                    <img src={cat.image} alt={cat.label} className="h-full w-full object-cover" />
+                  </span>
+
+                  <span
+                    className={`text-center text-sm leading-tight ${
+                      active ? "font-semibold text-[#293A55]" : "text-[#8a8071]"
+                    }`}
+                  >
+                    {cat.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------- */}
+      {/*  Category strip — MOBILE: horizontal scrollable chip menu    */}
+      {/* ---------------------------------------------------------- */}
+      <div className="rounded-t-[2rem] border-b border-[#E6D9C4] bg-gradient-to-b from-[#F8ECDD] to-[#FBF2E9] md:hidden">
+        <div className="px-4 pb-4 pt-6">
+          <div
+            className="flex gap-2.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {CATEGORIES.map((cat) => {
+              const active = cat.slug === activeCategory;
+
+              return (
+                <button
+                  key={cat.slug}
+                  type="button"
+                  onClick={() => setActiveCategory(cat.slug)}
+                  className={`flex shrink-0 cursor-pointer items-center gap-2 rounded-full border py-2 pl-2 pr-4 text-sm font-medium transition-colors ${
+                    active
+                      ? "border-[#293A55] bg-[#293A55] text-white"
+                      : "border-[#e6ddcd] bg-white text-[#5c5445]"
+                  }`}
+                >
+                  <span className="flex h-7 w-7 shrink-0 overflow-hidden rounded-full bg-[#F3E9DC]">
+                    <img src={cat.image} alt="" className="h-full w-full object-cover" />
+                  </span>
+                  {cat.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ---------------------------------------------------------- */}
+      {/*  Body: filters + product grid — back to skin background      */}
+      {/* ---------------------------------------------------------- */}
+      <div className="bg-[0000]">
+        <div className={`${CONTAINER} py-6 md:py-10`}>
+
+          {/* ── MOBILE filter bar: gender segmented control + sort ── */}
+          <div className="mb-6 flex items-center justify-between gap-3 md:hidden">
+            <div className="inline-flex rounded-full border border-[#e6ddcd] bg-white p-1">
               {(["boys", "girls"] as Gender[]).map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setGender(g)}
-                  className={`cursor-pointer rounded-full px-6 py-2 text-sm font-medium capitalize transition-colors ${
-                    gender === g
-                      ? "bg-[#293A55] text-white"
-                      : "text-[#8a8071] hover:text-[#293A55]"
+                  className={`cursor-pointer rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition-colors ${
+                    gender === g ? "bg-[#293A55] text-white" : "text-[#5c5445]"
                   }`}
                 >
                   {g}
                 </button>
               ))}
             </div>
-          </div>
 
-          <div className="relative mx-auto h-40 w-full max-w-md overflow-hidden rounded-[2rem] bg-[#efe4d3] shadow-[0_18px_38px_rgba(41,58,85,0.15)] sm:h-48 md:h-56">
-            <img
-              src={`https://picsum.photos/seed/newborn-hero-${gender}/900/500`}
-              alt={`Newborn ${gender} collection`}
-              className="h-full w-full object-cover"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ---------------------------------------------------------- */}
-      {/*  Category strip — rounded top, skin gradient dark→light,     */}
-      {/*  single line, light line separating it from the listing      */}
-      {/* ---------------------------------------------------------- */}
-      <div className="rounded-t-[2.5rem] border-b border-[#E6D9C4] bg-gradient-to-b from-[#F8ECDD] to-[#FBF2E9]"> <div className={`${CONTAINER} py-8`}> <div className="flex flex-wrap justify-center gap-x-6 gap-y-4 py-3"> {CATEGORIES.map((cat) => { const Icon = cat.icon; const active = cat.slug === activeCategory; return ( <button key={cat.slug} type="button" onClick={() => setActiveCategory(cat.slug)} className="flex shrink-0 cursor-pointer flex-col items-center gap-2" > <span className={`flex h-14 w-14 items-center justify-center rounded-full ${cat.iconBg} ${cat.iconColor} transition-all ${ active ? "ring-2 ring-offset-2 ring-[#293A55]" : "" }`} > <Icon className="h-5 w-5" strokeWidth={1.75} /> </span> <span className={`whitespace-nowrap text-xs ${ active ? "font-semibold text-[#293A55]" : "text-[#8a8071]" }`} > {cat.label} </span> </button> ); })} </div> </div> </div>
-
-      {/* ---------------------------------------------------------- */}
-      {/*  Body: filters + product grid — back to skin background      */}
-      {/* ---------------------------------------------------------- */}
-      <div className="bg-[#FBF2E9]">
-        <div className={`${CONTAINER} grid grid-cols-1 gap-10 py-10 md:grid-cols-[220px_1fr]`}>
-          {/* Sidebar */}
-          <aside className="space-y-8 md:border-r md:border-[#E6D9C4] md:pr-8">
-            <div>
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-wide text-[#a89d8b]">
-                Filter by
-              </h3>
-
-              <button
-                type="button"
-                onClick={() => setCategoryOpen((v) => !v)}
-                className="mb-3 flex w-full cursor-pointer items-center justify-between text-sm font-bold text-[#293A55]"
+            <div className="relative">
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="cursor-pointer appearance-none rounded-full border border-[#e6ddcd] bg-white py-2 pl-4 pr-9 text-sm font-medium text-[#293A55] outline-none"
+                style={{ fontFamily: FONT_HEADING }}
               >
-                Category
-                {categoryOpen ? (
-                  <ChevronUp className="h-4 w-4 text-[#a89d8b]" />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-[#a89d8b]" />
-                )}
-              </button>
-
-              {categoryOpen && (
-                <ul className="space-y-2.5">
-                  {CATEGORIES.map((cat) => (
-                    <li key={cat.slug}>
-                      <label className="flex cursor-pointer items-center gap-2 text-sm text-[#5c5445]">
-                        <input
-                          type="checkbox"
-                          checked={cat.slug === activeCategory}
-                          onChange={() => setActiveCategory(cat.slug)}
-                          className="h-4 w-4 cursor-pointer rounded border-[#d8cdb8] accent-[#293A55]"
-                        />
-                        {cat.label}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                <option>Newest</option>
+                <option>Price: Low to High</option>
+                <option>Price: High to Low</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8071]" />
             </div>
+          </div>
 
-            <div>
-              <h4 className="mb-3 text-sm font-bold text-[#293A55]">Size</h4>
-              <ul className="space-y-2.5">
-                {SIZES.map((size) => (
-                  <li key={size}>
-                    <label className="flex cursor-pointer items-center gap-2 text-sm text-[#5c5445]">
-                      <input
-                        type="checkbox"
-                        checked={selectedSizes.includes(size)}
-                        onChange={() => toggleSize(size)}
-                        className="h-4 w-4 cursor-pointer rounded border-[#d8cdb8] accent-[#293A55]"
-                      />
-                      {size}
-                    </label>
-                  </li>
+          <div className="grid grid-cols-1 gap-10 md:grid-cols-[180px_1fr]">
+            {/* ── DESKTOP sidebar: unchanged ── */}
+            <aside className="hidden space-y-5 border-b border-[#E6D9C4] pb-5 md:block md:border-b-0 md:border-r md:pr-8 md:pb-0">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#a89d8b]">Gender</p>
+              <div className="space-y-3">
+                {(["boys", "girls"] as Gender[]).map((g) => (
+                  <label key={g} className="flex cursor-pointer items-center gap-3 text-sm font-medium text-[#5c5445]">
+                    <input
+                      type="checkbox"
+                      checked={gender === g}
+                      onChange={() => setGender(g)}
+                      className="h-4 w-4 cursor-pointer rounded border-[#d8cdb8] accent-[#293A55]"
+                    />
+                    <span className={gender === g ? "text-[#293A55]" : "text-[#5c5445]"}>
+                      {g}
+                    </span>
+                  </label>
                 ))}
-              </ul>
-            </div>
-          </aside>
-
-          {/* Product grid */}
-          <section className="md:pl-2">
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-[#8a8071]">
-                Showing 1 - {products.length} of {products.length} products
-              </p>
-
-              <div className="relative">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="cursor-pointer appearance-none rounded-2xl border border-[#e6ddcd] bg-white py-2 pl-4 pr-9 text-sm font-medium text-[#293A55] outline-none"
-                  style={{ fontFamily: FONT_HEADING }}
-                >
-                  <option>Newest</option>
-                  <option>Price: Low to High</option>
-                  <option>Price: High to Low</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8071]" />
               </div>
-            </div>
+            </aside>
 
-            {products.length === 0 ? (
-              <p className="text-sm text-[#8a8071]">
-                No products yet in this category.
+            <section>
+              {/* ── DESKTOP results row: unchanged ── */}
+              <div className="mb-6 hidden flex-wrap items-center justify-between gap-3 md:flex">
+                <p className="text-sm text-[#8a8071]">
+                  Showing 1 - {visibleProducts.length} of {visibleProducts.length} products
+                </p>
+
+                <div className="relative">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="cursor-pointer appearance-none rounded-2xl border border-[#e6ddcd] bg-white py-2 pl-4 pr-9 text-sm font-medium text-[#293A55] outline-none"
+                    style={{ fontFamily: FONT_HEADING }}
+                  >
+                    <option>Newest</option>
+                    <option>Price: Low to High</option>
+                    <option>Price: High to Low</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8a8071]" />
+                </div>
+              </div>
+
+              {/* ── MOBILE result count ── */}
+              <p className="mb-4 text-sm text-[#8a8071] md:hidden">
+                Showing {visibleProducts.length} product{visibleProducts.length === 1 ? "" : "s"}
               </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-15 sm:grid-cols-3">
-                {products.map((product) => {
-                  const liked = favouriteIds.has(product.id);
-                  return (
-                    <Link
-                      key={product.id}
-                      href={`/newborns/${product.gender === "boy" ? "boys" : "girls"}/${product.tags.find((t) => t !== "newborn" && t !== product.gender) ?? ""}/${product.id}`}
-                      className="group block cursor-pointer"
-                    >
-                      <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#F3E9DC]">
-                        <Image
-                          src={product.image}
-                          alt={product.name}
-                          fill
-                          className="object-cover transition-transform duration-300 group-hover:scale-105"
-                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); void toggleFav(product); }}
-                          className="absolute right-3 top-3 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white shadow-sm"
-                          aria-label="Add to wishlist"
-                        >
-                          <Heart
-                            className={`h-4 w-4 ${
-                              liked
-                                ? "fill-red-500 text-red-500"
-                                : "text-[#293A55]"
-                            }`}
+
+              {loading ? (
+                <p className="text-sm text-[#8a8071]">Loading products...</p>
+              ) : error ? (
+                <p className="text-sm text-[#b91c1c]">{error}</p>
+              ) : visibleProducts.length === 0 ? (
+                <p className="text-sm text-[#8a8071]">No products yet in this category.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:gap-15">
+                  {visibleProducts.map((product) => {
+                    const liked = favouriteIds.has(product.id);
+                    return (
+                      <Link
+                        key={product.id}
+                        href={`/products/${product.id}`}
+                        className="group block cursor-pointer"
+                      >
+                        <div className="relative aspect-square overflow-hidden rounded-2xl bg-[#F3E9DC]">
+                          <Image
+                            src={getProductImage(product)}
+                            alt={product.name}
+                            fill
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                           />
-                        </button>
-                        {!product.inStock && (
-                          <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-                            Out of stock
-                          </span>
-                        )}
-                      </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); void toggleFav(product); }}
+                            className="absolute right-3 top-3 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white shadow-sm"
+                            aria-label="Add to wishlist"
+                          >
+                            <Heart
+                              className={`h-4 w-4 ${
+                                liked
+                                  ? "fill-red-500 text-red-500"
+                                  : "text-[#293A55]"
+                              }`}
+                            />
+                          </button>
+                          {!product.inStock && (
+                            <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+                              Out of stock
+                            </span>
+                          )}
+                        </div>
 
-                      <p className="mt-3 text-base font-bold text-[#293A55]">
-                        {product.name}
-                      </p>
-                      <p className="text-sm font-medium text-[#5c5445]">
-                        PKR {product.price.toLocaleString()}
-                      </p>
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                        <p className="mt-3 text-base font-bold text-[#293A55] items-center text-center truncate" title={product.name}>
+                          {product.name}
+                        </p>
+                        <p className="text-sm font-medium text-[#5c5445] items-center text-center">
+                          PKR {product.price.toLocaleString()}
+                        </p>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
         </div>
       </div>
     </div>

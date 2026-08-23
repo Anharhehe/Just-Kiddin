@@ -1,0 +1,6 @@
+-- AlterEnum
+ALTER TYPE "ProductAgeGroup" ADD VALUE IF NOT EXISTS 'ACCESSORIES';
+
+-- AlterTable
+ALTER TABLE "Product" ALTER COLUMN "category" DROP NOT NULL;
+ALTER TABLE "Product" ALTER COLUMN "gender" DROP NOT NULL;

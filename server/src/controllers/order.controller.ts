@@ -17,8 +17,8 @@ const orderItemSchema = z.object({
   size: z.string().min(1),
   color: z.string().min(1),
   category: z.string().min(1),
-  ageGroup: z.enum(["newborn", "toddler"]),
-  gender: z.enum(["boy", "girl"]),
+  ageGroup: z.enum(["newborn", "toddler", "accessories"]),
+  gender: z.enum(["boy", "girl"]).nullable(),
   inStock: z.boolean(),
 });
 
@@ -71,99 +71,166 @@ export async function createOrder(req: { body: unknown }, res: Response) {
   const orderId = randomUUID();
   const itemsJson = JSON.stringify(parsed.data.items);
 
-  const [order] = await prisma.$queryRaw<Array<{
-    id: string;
-    fullName: string;
-    email: string;
-    mobile: string;
-    address: string;
-    city: string;
-    postalCode: string | null;
-    notes: string | null;
-    paymentMethod: string;
-    promoCode: string | null;
-    subtotal: number;
-    discountAmount: number;
-    deliveryCharge: number;
-    totalAmount: number;
-    itemsJson: unknown;
-    status: string;
-    createdAt: Date;
-    updatedAt: Date;
-  }>>`
-    INSERT INTO "CustomerOrder" (
-      "id",
-      "fullName",
-      "email",
-      "mobile",
-      "address",
-      "city",
-      "postalCode",
-      "notes",
-      "paymentMethod",
-      "promoCode",
-      "subtotal",
-      "discountAmount",
-      "deliveryCharge",
-      "totalAmount",
-      "itemsJson",
-      "status",
-      "createdAt",
-      "updatedAt"
-    )
-    VALUES (
-      ${orderId},
-      ${parsed.data.customer.fullName},
-      ${parsed.data.customer.email},
-      ${parsed.data.customer.mobile},
-      ${parsed.data.customer.address},
-      ${parsed.data.customer.city},
-      ${parsed.data.customer.postalCode || null},
-      ${parsed.data.customer.notes || null},
-      'COD',
-      ${hasPromo ? promoCode : null},
-      ${subtotal},
-      ${discountAmount},
-      ${DELIVERY_CHARGE},
-      ${totalAmount},
-      ${itemsJson}::jsonb,
-      'PENDING',
-      NOW(),
-      NOW()
-    )
-    RETURNING
-      "id",
-      "fullName",
-      "email",
-      "mobile",
-      "address",
-      "city",
-      "postalCode",
-      "notes",
-      "paymentMethod",
-      "promoCode",
-      "subtotal",
-      "discountAmount",
-      "deliveryCharge",
-      "totalAmount",
-      "itemsJson",
-      "status",
-      "createdAt",
-      "updatedAt"
-  `;
+  const itemsByProduct = parsed.data.items.reduce<Map<string, number>>((groupedItems, item) => {
+    groupedItems.set(item.productId, (groupedItems.get(item.productId) ?? 0) + item.quantity);
+    return groupedItems;
+  }, new Map());
 
-  return res.status(201).json({
-    success: true,
-    message: "Order placed successfully",
-    data: {
-      orderId: order.id,
-      subtotal: order.subtotal,
-      discountAmount: order.discountAmount,
-      deliveryCharge: order.deliveryCharge,
-      totalAmount: order.totalAmount,
-      status: order.status,
-    },
-  });
+  try {
+    const [order] = await prisma.$transaction(async (tx) => {
+      for (const [productId, quantity] of itemsByProduct.entries()) {
+        const [product] = await tx.$queryRaw<Array<{
+          id: string;
+          stockQuantity: number;
+          name: string;
+        }>>`
+          SELECT
+            "id",
+            "stockQuantity",
+            "name"
+          FROM "Product"
+          WHERE "id" = ${productId}
+          LIMIT 1
+        `;
+
+        if (!product) {
+          throw new Error(`Product not found for item ${productId}`);
+        }
+
+        if (product.stockQuantity < quantity) {
+          throw new Error(`Only ${product.stockQuantity} items left for ${product.name}`);
+        }
+
+        const updatedRows = await tx.product.updateMany({
+          where: {
+            id: productId,
+            stockQuantity: {
+              gte: quantity,
+            },
+          },
+          data: {
+            stockQuantity: {
+              decrement: quantity,
+            },
+          },
+        });
+
+        if (updatedRows.count !== 1) {
+          throw new Error(`Unable to reserve stock for ${product.name}`);
+        }
+      }
+
+      const [createdOrder] = await tx.$queryRaw<Array<{
+      id: string;
+      fullName: string;
+      email: string;
+      mobile: string;
+      address: string;
+      city: string;
+      postalCode: string | null;
+      notes: string | null;
+      paymentMethod: string;
+      promoCode: string | null;
+      subtotal: number;
+      discountAmount: number;
+      deliveryCharge: number;
+      totalAmount: number;
+      itemsJson: unknown;
+      status: string;
+      createdAt: Date;
+      updatedAt: Date;
+    }>>`
+      INSERT INTO "CustomerOrder" (
+        "id",
+        "fullName",
+        "email",
+        "mobile",
+        "address",
+        "city",
+        "postalCode",
+        "notes",
+        "paymentMethod",
+        "promoCode",
+        "subtotal",
+        "discountAmount",
+        "deliveryCharge",
+        "totalAmount",
+        "itemsJson",
+        "status",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${orderId},
+        ${parsed.data.customer.fullName},
+        ${parsed.data.customer.email},
+        ${parsed.data.customer.mobile},
+        ${parsed.data.customer.address},
+        ${parsed.data.customer.city},
+        ${parsed.data.customer.postalCode || null},
+        ${parsed.data.customer.notes || null},
+        'COD',
+        ${hasPromo ? promoCode : null},
+        ${subtotal},
+        ${discountAmount},
+        ${DELIVERY_CHARGE},
+        ${totalAmount},
+        ${itemsJson}::jsonb,
+        'PENDING',
+        NOW(),
+        NOW()
+      )
+      RETURNING
+        "id",
+        "fullName",
+        "email",
+        "mobile",
+        "address",
+        "city",
+        "postalCode",
+        "notes",
+        "paymentMethod",
+        "promoCode",
+        "subtotal",
+        "discountAmount",
+        "deliveryCharge",
+        "totalAmount",
+        "itemsJson",
+        "status",
+        "createdAt",
+        "updatedAt"
+      `;
+
+      return [createdOrder];
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      data: {
+        orderId: order.id,
+        subtotal: order.subtotal,
+        discountAmount: order.discountAmount,
+        deliveryCharge: order.deliveryCharge,
+        totalAmount: order.totalAmount,
+        status: order.status,
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not place order";
+
+    if (/^Only \d+ items left for /.test(message) || message.startsWith("Product not found for item") || message.startsWith("Unable to reserve stock") || message.startsWith("Failed to reserve stock")) {
+      return res.status(409).json({
+        success: false,
+        message,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Could not place order",
+    });
+  }
 }
 
 export async function getMyOrders(req: AuthenticatedRequest, res: Response) {

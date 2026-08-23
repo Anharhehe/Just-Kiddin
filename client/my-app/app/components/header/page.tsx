@@ -139,42 +139,30 @@ export default function Header() {
       className="sticky top-0 z-50 w-full"
       style={{ background: heroBg }}
     >
-      {/*
-        Padding used to be a hard-coded `px-[1in]` (96px fixed, both sides,
-        on every screen). On a ~375px phone that alone ate over half the
-        width before the logo, nav, or icons even rendered — that's what
-        was crushing the logo. Now it scales with the viewport instead.
-      */}
       <div className="w-full px-3 sm:px-6 md:px-10 lg:px-16 xl:px-[1in] transition-colors duration-300">
-        <div className="flex h-16 sm:h-20 md:h-22 items-center justify-between gap-2 sm:gap-6">
 
-          {/* ── Logo ───────────────────────────────────────────────── */}
+        {/* ── Mobile Row (logo / icons / hamburger) ────────────────── */}
+        <div className="flex md:hidden items-center justify-between h-22 sm:h-20 gap-2">
+          {/* Left: logo */}
           <Link href="/" className="flex-shrink-0 min-w-0">
             <Image
               src="/logo.png"
               alt="Just Kidin' Logo"
               width={190}
               height={76}
-              className="w-[100px] xs:w-[118px] sm:w-[150px] md:w-[176px] h-auto object-contain"
+              className="w-[120px] xs:w-[136px] sm:w-[150px] h-auto object-contain"
               priority
             />
           </Link>
 
-          {/* ── Desktop Nav ────────────────────────────────────────────── */}
-          <nav className="hidden md:flex items-center gap-5 lg:gap-7 flex-shrink-0">
-            {navLinks.map((link) => (
-              <NavLink key={link.href} href={link.href} label={link.label} />
-            ))}
-          </nav>
-
-          {/* ── Right Icons ────────────────────────────────────────────── */}
-          <div className="flex items-center gap-0 xs:gap-0.5 sm:gap-1 shrink-0">
+          {/* Right: icons + hamburger */}
+          <div className="flex items-center gap-0.5 xs:gap-1 shrink-0">
             <IconBtn title="Cart" onClick={() => router.push("/cart")}>
               <div className="relative">
-                <ShoppingBag className="h-[18px] w-[18px] sm:h-6 sm:w-6" />
+                <ShoppingBag className="h-6 w-6" />
                 {hydrated && itemCount > 0 ? (
                   <span
-                    className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 px-1 sm:h-4 sm:min-w-4 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white"
+                    className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full text-[10px] font-bold text-white"
                     style={{ background: "var(--primary)" }}
                   >
                     {itemCount}
@@ -184,25 +172,76 @@ export default function Header() {
             </IconBtn>
 
             <IconBtn title="Wishlist" onClick={() => router.push("/favourites")}>
-              <Heart className="h-[18px] w-[18px] sm:h-6 sm:w-6" />
+              <Heart className="h-6 w-6" />
             </IconBtn>
 
             <IconBtn onClick={handleProfileClick} title={isAuthenticated ? "My Profile" : "Login / Signup"}>
               <UserCircle2
-                className="h-[18px] w-[18px] sm:h-6 sm:w-6"
+                className="h-6 w-6"
                 style={{ color: isAuthenticated ? "var(--primary)" : "var(--foreground)" }}
               />
             </IconBtn>
 
             <button
-              className="md:hidden p-1.5 sm:p-2 rounded-full cursor-pointer transition-colors duration-200"
+              className="p-2 rounded-full cursor-pointer transition-colors duration-200"
               style={{ color: "var(--foreground)" }}
               onClick={() => setMobileOpen((v) => !v)}
               aria-label="Toggle menu"
               aria-expanded={mobileOpen}
             >
-              {mobileOpen ? <X className="h-5 w-5 sm:h-6 sm:w-6" /> : <Menu className="h-5 w-5 sm:h-6 sm:w-6" />}
+              {mobileOpen ? <X className="h-7 w-7" /> : <Menu className="h-7 w-7" />}
             </button>
+          </div>
+        </div>
+
+        {/* ── Desktop Row (unchanged) ────────────────────────────────── */}
+        <div className="hidden md:flex h-24 items-center justify-between gap-6">
+
+          {/* ── Logo ───────────────────────────────────────────────── */}
+          <Link href="/" className="flex-shrink-0 min-w-0">
+            <Image
+              src="/logo.png"
+              alt="Just Kidin' Logo"
+              width={190}
+              height={76}
+              className="w-[150px] md:w-[176px] h-auto object-contain"
+              priority
+            />
+          </Link>
+
+          {/* ── Desktop Nav ────────────────────────────────────────────── */}
+          <nav className="flex items-center gap-5 lg:gap-7 flex-shrink-0">
+            {navLinks.map((link) => (
+              <NavLink key={link.href} href={link.href} label={link.label} />
+            ))}
+          </nav>
+
+          {/* ── Right Icons ────────────────────────────────────────────── */}
+          <div className="flex items-center gap-1 shrink-0">
+            <IconBtn title="Cart" onClick={() => router.push("/cart")}>
+              <div className="relative">
+                <ShoppingBag className="h-6 w-6" />
+                {hydrated && itemCount > 0 ? (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 px-1 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                    style={{ background: "var(--primary)" }}
+                  >
+                    {itemCount}
+                  </span>
+                ) : null}
+              </div>
+            </IconBtn>
+
+            <IconBtn title="Wishlist" onClick={() => router.push("/favourites")}>
+              <Heart className="h-6 w-6" />
+            </IconBtn>
+
+            <IconBtn onClick={handleProfileClick} title={isAuthenticated ? "My Profile" : "Login / Signup"}>
+              <UserCircle2
+                className="h-6 w-6"
+                style={{ color: isAuthenticated ? "var(--primary)" : "var(--foreground)" }}
+              />
+            </IconBtn>
           </div>
         </div>
       </div>

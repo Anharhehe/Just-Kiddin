@@ -12,6 +12,17 @@ export type AuthenticatedRequest = Request & {
   user?: AuthenticatedUser;
 };
 
+export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction) {
+  if (req.user?.role !== "ADMIN") {
+    return res.status(403).json({
+      success: false,
+      message: "Forbidden"
+    });
+  }
+
+  return next();
+}
+
 export function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   const bearer = req.headers.authorization?.startsWith("Bearer ")
     ? req.headers.authorization.slice(7)

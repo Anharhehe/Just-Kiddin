@@ -1,20 +1,34 @@
 // products.ts
 // Demo product data for newborns & toddlers (boy/girl) clothing categories.
-// Every product uses the same placeholder image — save it at
-// public/demo.png
+// The live API now supplies real image records, but the demo fallback still
+// keeps older static sections and placeholder content working.
+
+export interface ProductImage {
+  id?: string;
+  type?: string;
+  url: string;
+  path?: string;
+  altText?: string | null;
+  position?: number;
+  createdAt?: string | Date;
+}
 
 export interface Product {
   id: string;
   name: string;
-  category: string;
-  ageGroup: "newborn" | "toddler";
-  gender: "boy" | "girl";
+  category: string | null;
+  ageGroup: "newborn" | "toddler" | "accessories";
+  gender: "boy" | "girl" | null;
   tags: string[];
   price: number;
-  image: string[];
-  colors: string[];
+  image: any;
+  images?: ProductImage[];
+  colors?: string[];
   sizes: string[];
   inStock: boolean;
+  description?: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export const products: Product[] = [
@@ -2624,7 +2638,7 @@ export const products: Product[] = [
     "Keep your little one cozy and comfortable with our Classic Sleepsuits for Boys. Crafted from soft, breathable cotton, these sleepsuits are gentle on delicate newborn skin and perfect for everyday wear. Featuring easy snap-button closures for quick diaper changes and a snug yet comfortable fit, they're an essential addition to your baby's wardrobe.",
 
   image: [
-    "/demo.png",
+    "/demo3.png",
     "/demo.png",
     "/demo.png",
     "/demo.png",

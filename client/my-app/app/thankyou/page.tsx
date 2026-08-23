@@ -7,7 +7,6 @@ export default function ThankYouPage({ searchParams }: { searchParams?: { orderI
 	return (
 		<main
 			className="flex min-h-[70vh] items-center justify-center bg-[#0000] px-6 py-8 sm:px-10"
-			style={{ fontFamily: "'Baloo 2', cursive" }}
 			style={{ fontFamily: "'Quicksand', sans-serif" }}
 		>
 			<div className="flex w-full max-w-lg flex-col items-center text-center">
@@ -21,8 +20,6 @@ export default function ThankYouPage({ searchParams }: { searchParams?: { orderI
 				</h1>
 
 				<p className="mt-2 text-[#6b7280]">Your order has been placed successfully.</p>
-
-
 				<p className="mt-2 text-sm text-[#9ca3af]">
 					We will call you shortly for order confirmation.
 				</p>

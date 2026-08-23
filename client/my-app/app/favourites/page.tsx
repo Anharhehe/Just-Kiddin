@@ -48,7 +48,7 @@ export default function FavouritesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FCF5EE]" style={{ fontFamily: FONT_BODY }}>
+    <div className="min-h-screen bg-[#0000]" style={{ fontFamily: FONT_BODY }}>
       {/* Header */}
       <div className="px-6 pt-10 pb-6 sm:px-[1in]">
         <div className="flex items-center gap-3">

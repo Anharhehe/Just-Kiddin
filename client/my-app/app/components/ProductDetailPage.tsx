@@ -6,9 +6,9 @@ import { useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Heart, ShoppingCart, Zap, Minus, Plus, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { products as allProducts, type Product } from "../data/demo";
-import { reviews as REVIEWS, type Review } from "../reviews/page";
 import { useFavourites } from "../hooks/useFavourites";
 import { useCart } from "../context/CartContext";
+import { getProductGallery, getProductImage } from "../utils/product-image";
 
 const FONT_HEADING = "'Quicksand', sans-serif";
 const FONT_BODY = "'Quicksand', sans-serif";
@@ -31,16 +31,7 @@ function seededRandom(seed: number) {
   };
 }
 
-function pickRandomReviews(id: string | number, count: number): Review[] {
-  const rand = seededRandom(hashSeed(id));
-  const pool = [...REVIEWS];
-  const picked: Review[] = [];
-  for (let i = 0; i < count && pool.length > 0; i++) {
-    const idx = Math.floor(rand() * pool.length);
-    picked.push(pool.splice(idx, 1)[0]);
-  }
-  return picked;
-}
+
 
 interface Props {
   product: Product;
@@ -49,6 +40,8 @@ interface Props {
   parentLabel: string;
   grandParentLabel: string;
   grandParentHref: string;
+  relatedProducts?: Product[];
+  relatedHrefBase?: string;
 }
 
 export default function ProductDetailPage({
@@ -58,13 +51,11 @@ export default function ProductDetailPage({
   parentLabel,
   grandParentLabel,
   grandParentHref,
+  relatedProducts,
+  relatedHrefBase,
 }: Props) {
   const router = useRouter();
-  const galleryImages = Array.isArray(product.image)
-    ? product.image.length > 0
-      ? product.image
-      : ["/demo.png"]
-    : [product.image || "/demo.png"];
+  const galleryImages = getProductGallery(product);
 
   // product.colors is a plain string array (e.g. "Blue", "White") — CSS understands these names directly
   const availableColors = product.colors ?? [];
@@ -94,25 +85,27 @@ export default function ProductDetailPage({
   // "was" price shown struck-through — 15% higher than the actual price
   const compareAtPrice = useMemo(() => Math.round(product.price * 1.15), [product.price]);
 
+  const relatedSource = relatedProducts ?? allProducts;
+
   const related = useMemo(
     () =>
-      allProducts
-        .filter(
-          (p) =>
-            p.ageGroup === product.ageGroup &&
-            p.gender === product.gender &&
-            p.category === product.category &&
-            p.id !== product.id
-        )
+      relatedSource
+        .filter((p) => {
+          if (p.id === product.id) {
+            return false;
+          }
+
+          if (product.ageGroup === "accessories") {
+            return p.ageGroup === "accessories" && p.category === product.category;
+          }
+
+          return p.ageGroup === product.ageGroup && p.gender === product.gender && p.category === product.category;
+        })
         .slice(0, 4),
-    [product]
+    [product, relatedSource]
   );
 
-  const productReviews = useMemo(() => pickRandomReviews(product.id, 6), [product.id]);
-  const avgRating = useMemo(() => {
-    if (productReviews.length === 0) return 0;
-    return productReviews.reduce((sum, r) => sum + r.rating, 0) / productReviews.length;
-  }, [productReviews]);
+
 
   const handleAddToCart = () => {
     if (!selectedSize) {
@@ -243,7 +236,7 @@ export default function ProductDetailPage({
           <div className="flex w-full flex-col justify-center gap-3.5">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
-                {product.category} · {grandParentLabel} · {parentLabel}
+                {product.category ?? "Accessories"} · {grandParentLabel} · {parentLabel}
               </p>
               <h1 className="mt-1.5 text-2xl font-extrabold leading-tight text-[#2F2A22] sm:text-3xl" style={{ fontFamily: FONT_HEADING }}>
                 {product.name}
@@ -400,76 +393,33 @@ export default function ProductDetailPage({
           </div>
         </div>
 
-<div className="mt-20 mb-8 flex w-full justify-center">
-  <div className="h-0 w-full border-t border-[#C86909]/60" />
-</div>
 
-        {/* Reviews */}
-        {productReviews.length > 0 && (
-          <div className="mt-14">
-            <div className="mb-6 flex flex-wrap items-end justify-between gap-2">
-              <h2 className="text-xl font-extrabold text-[#2F2A22] sm:text-2xl" style={{ fontFamily: FONT_HEADING }}>
-                Customer Reviews
-              </h2>
-              <div className="flex items-center gap-1.5">
-                <div className="flex items-center gap-0.5">
-                  {[1, 2, 3, 4, 5].map((n) => (
-                    <Star
-                      key={n}
-                      className={`h-4 w-4 ${n <= Math.round(avgRating) ? "fill-[#E8735F] text-[#E8735F]" : "text-[#D8CCBC]"}`}
-                    />
-                  ))}
-                </div>
-                <span className="text-xs font-semibold text-[#6B7280]">
-                  {avgRating.toFixed(1)} · {productReviews.length} reviews
-                </span>
-              </div>
+
+            <div className="mt-20 mb-8 flex w-full justify-center">
+            <div className="h-0 w-full border-t border-[#C86909]/60" />
             </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {productReviews.map((r) => (
-                <div
-                  key={r.id}
-                  className="rounded-2xl border border-[#E8DDCC] bg-white p-4 shadow-sm"
-                >
-                  <div className="mb-2 flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star
-                        key={n}
-                        className={`h-3.5 w-3.5 ${n <= r.rating ? "fill-[#E8735F] text-[#E8735F]" : "text-[#D8CCBC]"}`}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm leading-relaxed text-[#3d372c]">&ldquo;{r.review}&rdquo;</p>
-                  <p className="mt-3 text-xs font-bold text-[#2F2A22]" style={{ fontFamily: FONT_HEADING }}>
-                    {r.name}
-                    <span className="ml-1.5 font-normal text-[#9a8f7f]">— {r.city}</span>
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-<div className="mt-20 mb-8 flex w-full justify-center">
-  <div className="h-0 w-full border-t border-[#C86909]/60" />
-</div>
 
         {/* Related — comes last */}
         {related.length > 0 && (
           <div className="mt-14">
             <h2 className="mb-5 text-xl font-extrabold text-[#2F2A22] sm:text-2xl" style={{ fontFamily: FONT_HEADING }}>
-              More in {product.category}
+              More in {product.category ?? "Accessories"}
             </h2>
             <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
               {related.map((rel) => (
                 <Link
                   key={rel.id}
-                  href={`${backHref}/${rel.id}`}
+                  href={`${relatedHrefBase ?? backHref}/${rel.id}`}
                   className="group overflow-hidden rounded-xl border border-[#E8DDCC] bg-white shadow-sm transition-transform hover:scale-[1.02]"
                 >
                   <div className="relative aspect-square bg-[#F7EFE4]">
-                    <Image src={rel.image[0]} alt={rel.name} fill className="object-cover" sizes="25vw" />
+                    <Image
+                      src={getProductImage(rel)}
+                      alt={rel.name}
+                      fill
+                      className="object-cover"
+                      sizes="25vw"
+                    />
                   </div>
                   <div className="p-2.5">
                     <p className="truncate text-xs font-semibold text-[#2F2A22]" style={{ fontFamily: FONT_HEADING }}>

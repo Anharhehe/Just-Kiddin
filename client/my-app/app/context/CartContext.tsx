@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Product } from "../data/demo";
+import { getProductImage } from "../utils/product-image";
 
 const STORAGE_KEY = "just-kidin-cart-v1";
 
@@ -41,7 +42,11 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 
 function normalizeImage(image: Product["image"]): string {
-  return Array.isArray(image) ? image[0] : image;
+  if (Array.isArray(image)) {
+    return image[0] ?? "/demo.png";
+  }
+
+  return image || "/demo.png";
 }
 
 function createCartItemId(productId: string, size: string, color: string) {
@@ -80,7 +85,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const addItem = ({ product, quantity, size, color }: AddCartItemInput) => {
       const normalizedQuantity = Math.max(1, quantity);
       const cartItemId = createCartItemId(product.id, size, color);
-      const image = normalizeImage(product.image);
+      const image = getProductImage(product) || normalizeImage(product.image);
 
       setItems((prev) => {
         const existing = prev.find((item) => item.cartItemId === cartItemId);
@@ -102,7 +107,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             quantity: normalizedQuantity,
             size,
             color,
-            category: product.category,
+            category: product.category ?? "Accessories",
             ageGroup: product.ageGroup,
             gender: product.gender,
             inStock: product.inStock,

@@ -24,6 +24,22 @@ enum ContactQueryStatus {
   RESOLVED
 }
 
+enum ProductAgeGroup {
+  NEWBORN
+  TODDLER
+  ACCESSORIES
+}
+
+enum ProductGender {
+  BOY
+  GIRL
+}
+
+enum ProductImageType {
+  PRIMARY
+  GALLERY
+}
+
 model User {
   id           String       @id @default(cuid())
   email        String       @unique
@@ -67,6 +83,16 @@ model ContactQuery {
   updatedAt DateTime           @updatedAt
 }
 
+model Review {
+  id        String   @id @default(cuid())
+  name      String
+  city      String
+  rating    Int
+  review    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model CustomerOrder {
   id             String   @id @default(cuid())
   fullName       String
@@ -86,4 +112,45 @@ model CustomerOrder {
   status         String   @default("PENDING")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model Product {
+  id               String          @id @default(cuid())
+  slug             String          @unique
+  name             String
+  category         String?
+  ageGroup         ProductAgeGroup
+  gender           ProductGender?
+  tags             String[]
+  price            Int
+  description      String?
+  sizes            String[]
+  colors           String[]
+  sku              String?         @unique
+  stockQuantity    Int             @default(0)
+  lowStockThreshold Int            @default(5)
+  isActive         Boolean         @default(true)
+  isFeatured       Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  images           ProductImage[]
+
+  @@index([ageGroup, gender, category])
+  @@index([isActive, isFeatured])
+}
+
+model ProductImage {
+  id          String          @id @default(cuid())
+  productId   String
+  type        ProductImageType @default(GALLERY)
+  url         String
+  path        String
+  altText     String?
+  position    Int             @default(0)
+  createdAt   DateTime        @default(now())
+
+  product     Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+  @@index([type])
 }

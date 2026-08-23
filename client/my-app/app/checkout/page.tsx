@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -18,9 +18,12 @@ import {
 	Loader2,
 } from "lucide-react";
 import { useCart } from "../context/CartContext";
+import { getProductImage } from "../utils/product-image";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+const FORMSPREE_ENDPOINT = "https://formspree.io/f/maewplde";
 const DELIVERY_CHARGE = 300;
+const FREE_DELIVERY_THRESHOLD = 3000;
 const FONT_HEADING = "'Quicksand', sans-serif";
 
 const PROMO_CODES = ["KIDIN10", "BABY10", "CUTE10", "MINI10", "SMART10", "FAMILY10", "LOVE10", "FIRST10", "SWEET10", "JUNIOR10"];
@@ -28,6 +31,16 @@ const PROMO_CODES = ["KIDIN10", "BABY10", "CUTE10", "MINI10", "SMART10", "FAMILY
 function formatCurrency(amount: number) {
 	return `PKR ${amount.toLocaleString()}`;
 }
+
+type ProductCard = {
+	id: string;
+	name: string;
+	price: number;
+	image: string | string[];
+	images?: { url: string }[];
+	inStock: boolean;
+	ageGroup?: string;
+};
 
 type FormState = {
 	fullName: string;
@@ -95,13 +108,56 @@ export default function CheckoutPage() {
 	const [promoError, setPromoError] = useState("");
 	const [placingOrder, setPlacingOrder] = useState(false);
 	const [submitError, setSubmitError] = useState("");
+	const [accessoryProducts, setAccessoryProducts] = useState<ProductCard[]>([]);
+	const [loadingAccessories, setLoadingAccessories] = useState(false);
 
 	const discountAmount = useMemo(() => {
 		if (!appliedPromo) return 0;
 		return Math.round(subtotal * 0.1);
 	}, [appliedPromo, subtotal]);
 
-	const totalAmount = subtotal - discountAmount + DELIVERY_CHARGE;
+	const orderAmount = subtotal - discountAmount;
+	const deliveryCharge = orderAmount >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_CHARGE;
+	const totalAmount = orderAmount + deliveryCharge;
+	const deliveryMessage =
+		deliveryCharge === 0
+			? "Yahoo, you got free delivery!"
+			: `Add necessary accessories to get free delivery over ${formatCurrency(FREE_DELIVERY_THRESHOLD)}.`;
+
+	useEffect(() => {
+		let cancelled = false;
+
+		async function loadAccessories() {
+			setLoadingAccessories(true);
+
+			try {
+				const response = await fetch(`${API_BASE_URL}/api/products?ageGroup=accessories&active=true`);
+				if (!response.ok) {
+					return;
+				}
+
+				const payload = (await response.json()) as { data?: { products?: ProductCard[] } };
+				if (!cancelled) {
+					const products = payload.data?.products ?? [];
+					// The API route doesn't actually filter by ageGroup server-side,
+					// so we filter client-side. The stored/returned value is the
+					// lowercase enum value "accessories" (Supabase's table editor
+					// just displays it in caps for readability).
+					setAccessoryProducts(products.filter((product) => product.ageGroup === "accessories"));
+				}
+			} finally {
+				if (!cancelled) {
+					setLoadingAccessories(false);
+				}
+			}
+		}
+
+		void loadAccessories();
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const updateField = (name: keyof FormState, value: string) => {
 		setForm((prev) => ({ ...prev, [name]: value }));
@@ -160,8 +216,37 @@ export default function CheckoutPage() {
 				throw new Error(payload?.message ?? "Could not place order");
 			}
 
+			const orderId = payload.data.orderId;
+
+			void fetch(FORMSPREE_ENDPOINT, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Accept: "application/json",
+				},
+				body: JSON.stringify({
+					_subject: `New Order Received - ${orderId}`,
+					orderId,
+					customerName: form.fullName,
+					email: form.email,
+					mobile: form.mobile,
+					address: `${form.address}, ${form.city} ${form.postalCode}`.trim(),
+					notes: form.notes,
+					items: items
+						.map((item) => `${item.name} (Size ${item.size}) x${item.quantity} - ${formatCurrency(item.price * item.quantity)}`)
+						.join("\n"),
+					promoCode: promoCode || "None",
+					subtotal: formatCurrency(subtotal),
+					discount: formatCurrency(discountAmount),
+					deliveryCharge: deliveryCharge === 0 ? "Free" : formatCurrency(deliveryCharge),
+					total: formatCurrency(totalAmount),
+				}),
+			}).catch((error) => {
+				console.error("Formspree notification failed:", error);
+			});
+
 			clearCart();
-			router.push(`/thankyou?orderId=${payload.data.orderId}`);
+			router.push(`/thankyou?orderId=${orderId}`);
 		} catch (error) {
 			setSubmitError(error instanceof Error ? error.message : "Could not place order");
 		} finally {
@@ -212,7 +297,7 @@ export default function CheckoutPage() {
 					<p className="text-sm text-[#7A6F5D]">Fill in your details, apply a promo code if you have one, and confirm the order.</p>
 				</div>
 
-				<form onSubmit={handlePlaceOrder} className="mt-10 grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+				<form onSubmit={handlePlaceOrder} className="mt-10 grid items-stretch gap-8 lg:grid-cols-[1.2fr_0.8fr]">
 				<section className="space-y-6 rounded-[2rem] border border-[#e3dccb] bg-[#f8f5ef] p-5 shadow-[0_12px_36px_rgba(0,0,0,0.08)] sm:p-7">
 					<div>
 						<h2 className="text-2xl font-bold text-[#0F2540]">
@@ -304,7 +389,7 @@ export default function CheckoutPage() {
 					</button>
 				</section>
 
-				<aside className="h-fit rounded-[2rem] border border-[#e3dccb] bg-[#f8f5ef] p-5 shadow-[0_12px_36px_rgba(0,0,0,0.08)] sm:p-7">
+				<aside className="flex h-full flex-col rounded-[2rem] border border-[#e3dccb] bg-[#f8f5ef] p-5 shadow-[0_12px_36px_rgba(0,0,0,0.08)] sm:p-7">
 					<h2 className="text-2xl font-bold text-[#0F2540]">
 						Order summary
 					</h2>
@@ -335,8 +420,11 @@ export default function CheckoutPage() {
 						</div>
 						<div className="flex items-center justify-between">
 							<span>Delivery charge</span>
-							<span className="font-semibold text-[#0F2540]">{formatCurrency(DELIVERY_CHARGE)}</span>
+							<span className="font-semibold text-[#0F2540]">{deliveryCharge === 0 ? "Free" : formatCurrency(deliveryCharge)}</span>
 						</div>
+						<p className={`rounded-xl px-3 py-2 text-sm font-semibold flex items-center text-center ${deliveryCharge === 0 ? "bg-emerald-50 text-emerald-700" : "bg-[#fff7ed] text-[#b45309]"}`}>
+							{deliveryMessage}
+						</p>
 						<div className="border-t border-[#e3dccb] pt-3">
 							<div className="flex items-center justify-between text-base font-bold text-[#0F2540]">
 								<span>Total</span>
@@ -345,11 +433,40 @@ export default function CheckoutPage() {
 						</div>
 					</div>
 
-					
+					<div className="mt-6 flex flex-col rounded-[1.5rem] border border-[#e3dccb] bg-white p-4">
+						<div className="flex items-center justify-between gap-3">
+							<div>
+								<p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#7FA08D]">Accessories</p>
+								<h3 className="mt-1 text-lg font-bold text-[#0F2540]">Small add-ons that fit the order</h3>
+							</div>
+							<Link href="/accessories" className="text-xs font-semibold uppercase tracking-[0.16em] text-[#ff7d6b] hover:underline">
+								View more
+							</Link>
+						</div>
+
+						{loadingAccessories ? (
+							<p className="mt-4 text-sm text-[#7A6F5D]">Loading accessories...</p>
+						) : accessoryProducts.length > 0 ? (
+							<div className="mt-4 max-h-64 space-y-3 overflow-y-auto pr-1">
+								{accessoryProducts.map((product) => (
+									<Link key={product.id} href={`/products/${product.id}`} className="flex items-center gap-3 rounded-2xl border border-[#f0e6d7] bg-[#fffdf8] p-3 transition hover:border-[#ff7d6b]/40 hover:shadow-sm">
+										<div className="relative h-14 w-14 overflow-hidden rounded-xl bg-[#f8f5ef]">
+											<Image src={getProductImage(product)} alt={product.name} fill className="object-cover" sizes="56px" />
+										</div>
+										<div className="min-w-0 flex-1">
+											<p className="truncate text-sm font-semibold text-[#0F2540]">{product.name}</p>
+											<p className="text-xs text-[#7A6F5D]">{formatCurrency(product.price)}</p>
+										</div>
+									</Link>
+								))}
+							</div>
+						) : (
+							<p className="mt-4 text-sm text-[#7A6F5D]">Accessories will appear here once they are added to the database.</p>
+						)}
+					</div>
 				</aside>
 				</form>
 			</div>
 		</main>
 	);
 }
-

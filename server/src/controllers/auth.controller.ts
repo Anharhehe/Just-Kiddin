@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
@@ -35,8 +36,56 @@ type AuthJwtPayload = {
   role: "USER" | "ADMIN";
 };
 
+type GoogleTokenResponse = {
+  access_token?: string;
+  id_token?: string;
+  expires_in?: number;
+  token_type?: string;
+  scope?: string;
+  error?: string;
+  error_description?: string;
+};
+
+type GoogleTokenInfoResponse = {
+  aud?: string;
+  email?: string;
+  email_verified?: string;
+  sub?: string;
+  name?: string;
+  picture?: string;
+};
+
 const ADMIN_EMAIL = "sanan@admin.com";
 const ADMIN_PASSWORD = "@Sanan123";
+const GOOGLE_STATE_COOKIE = "jk_google_oauth_state";
+const GOOGLE_VERIFIER_COOKIE = "jk_google_code_verifier";
+
+function getFrontendOrigin() {
+  return env.CORS_ORIGIN.replace(/\/$/, "");
+}
+
+function getGoogleRedirectUri(req: Request) {
+  return `${req.protocol}://${req.get("host")}/api/auth/google/callback`;
+}
+
+function setTempOAuthCookie(res: Response, name: string, value: string) {
+  res.cookie(name, value, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 1000 * 60 * 10,
+    path: "/"
+  });
+}
+
+function clearTempOAuthCookie(res: Response, name: string) {
+  res.clearCookie(name, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/"
+  });
+}
 
 function signAccessToken(payload: AuthJwtPayload) {
   const options: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"] };
@@ -201,17 +250,122 @@ export async function loginWithEmail(req: Request, res: Response) {
 }
 
 export async function loginWithGoogle(_req: Request, res: Response) {
-  return res.status(501).json({
-    success: false,
-    message: "Google auth flow is not implemented yet"
-  });
+  if (!env.GOOGLE_CLIENT_ID) {
+    return res.status(500).json({
+      success: false,
+      message: "GOOGLE_CLIENT_ID is required to use Google sign-in"
+    });
+  }
+
+  const state = randomBytes(24).toString("base64url");
+  const codeVerifier = randomBytes(32).toString("base64url");
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+  const redirectUri = getGoogleRedirectUri(_req);
+
+  setTempOAuthCookie(res, GOOGLE_STATE_COOKIE, state);
+  setTempOAuthCookie(res, GOOGLE_VERIFIER_COOKIE, codeVerifier);
+
+  const googleAuthUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  googleAuthUrl.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
+  googleAuthUrl.searchParams.set("redirect_uri", redirectUri);
+  googleAuthUrl.searchParams.set("response_type", "code");
+  googleAuthUrl.searchParams.set("scope", "openid email profile");
+  googleAuthUrl.searchParams.set("state", state);
+  googleAuthUrl.searchParams.set("code_challenge", codeChallenge);
+  googleAuthUrl.searchParams.set("code_challenge_method", "S256");
+  googleAuthUrl.searchParams.set("prompt", "select_account");
+
+  return res.redirect(302, googleAuthUrl.toString());
 }
 
-export async function googleCallback(_req: Request, res: Response) {
-  return res.status(501).json({
-    success: false,
-    message: "Google callback is not implemented yet"
-  });
+export async function googleCallback(req: Request, res: Response) {
+  const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
+  const state = typeof req.query.state === "string" ? req.query.state.trim() : "";
+  const storedState = typeof req.cookies?.[GOOGLE_STATE_COOKIE] === "string" ? req.cookies[GOOGLE_STATE_COOKIE] : "";
+  const codeVerifier = typeof req.cookies?.[GOOGLE_VERIFIER_COOKIE] === "string" ? req.cookies[GOOGLE_VERIFIER_COOKIE] : "";
+
+  clearTempOAuthCookie(res, GOOGLE_STATE_COOKIE);
+  clearTempOAuthCookie(res, GOOGLE_VERIFIER_COOKIE);
+
+  if (!env.GOOGLE_CLIENT_ID) {
+    return res.redirect(`${getFrontendOrigin()}/auth?google=missing-client-id`);
+  }
+
+  if (!code || !state || !storedState || state !== storedState || !codeVerifier) {
+    return res.redirect(`${getFrontendOrigin()}/auth?google=invalid-state`);
+  }
+
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_CLIENT_ID,
+        ...(env.GOOGLE_CLIENT_SECRET ? { client_secret: env.GOOGLE_CLIENT_SECRET } : {}),
+        code,
+        code_verifier: codeVerifier,
+        grant_type: "authorization_code",
+        redirect_uri: getGoogleRedirectUri(req)
+      })
+    });
+
+    const tokenPayload = (await tokenResponse.json()) as GoogleTokenResponse;
+
+    if (!tokenResponse.ok || !tokenPayload.id_token) {
+      return res.redirect(`${getFrontendOrigin()}/auth?google=token-exchange-failed`);
+    }
+
+    const tokenInfoResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(tokenPayload.id_token)}`);
+    const tokenInfo = (await tokenInfoResponse.json()) as GoogleTokenInfoResponse;
+
+    if (!tokenInfoResponse.ok || tokenInfo.aud !== env.GOOGLE_CLIENT_ID || tokenInfo.email_verified !== "true" || !tokenInfo.email || !tokenInfo.sub) {
+      return res.redirect(`${getFrontendOrigin()}/auth?google=token-invalid`);
+    }
+
+    const email = tokenInfo.email.toLowerCase();
+    const googleId = tokenInfo.sub;
+    const fullName = tokenInfo.name?.trim() || email.split("@")[0] || "Google User";
+
+    const existingByGoogleId = await prisma.user.findUnique({ where: { googleId } });
+    const existingByEmail = existingByGoogleId ? null : await prisma.user.findUnique({ where: { email } });
+
+    const user = existingByGoogleId
+      ? await prisma.user.update({
+          where: { id: existingByGoogleId.id },
+          data: {
+            fullName: existingByGoogleId.fullName ?? fullName,
+            email,
+            googleId,
+            authProvider: "GOOGLE"
+          }
+        })
+      : existingByEmail
+        ? await prisma.user.update({
+            where: { id: existingByEmail.id },
+            data: {
+              fullName: existingByEmail.fullName ?? fullName,
+              googleId,
+              authProvider: "GOOGLE"
+            }
+          })
+        : await prisma.user.create({
+            data: {
+              fullName,
+              email,
+              googleId,
+              authProvider: "GOOGLE"
+            }
+          });
+
+    const token = signAccessToken({ sub: user.id, email: user.email, role: user.role });
+    setAuthCookie(res, token);
+
+    return res.redirect(`${getFrontendOrigin()}${user.role === "ADMIN" ? "/admin" : "/"}`);
+  } catch (_error) {
+    return res.redirect(`${getFrontendOrigin()}/auth?google=failed`);
+  }
 }
 
 export async function getCurrentUser(req: AuthenticatedRequest, res: Response) {

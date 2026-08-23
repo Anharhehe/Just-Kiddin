@@ -2,6 +2,7 @@
 
 import Header from "./header/page";
 import Footer from "./footer/page";
+import ReviewsWidget from "./reviews/page";
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   return (
@@ -9,6 +10,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
       <Header />
       <main style={{ flex: "0 0 auto" }}>{children}</main>
       <Footer />
+      <ReviewsWidget />
     </>
   );
 }

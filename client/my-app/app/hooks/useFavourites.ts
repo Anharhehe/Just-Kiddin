@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Product } from "../data/demo";
+import { getProductImage } from "../utils/product-image";
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 
@@ -57,10 +58,10 @@ export function useFavourites() {
             productId: product.id,
             name:      product.name,
             price:     product.price,
-            image:     product.image,
-            category:  product.category,
+            image:     getProductImage(product),
+            category:  product.category ?? "Accessories",
             ageGroup:  product.ageGroup,
-            gender:    product.gender,
+            gender:    product.gender ?? "accessories",
           }),
         });
         setFavouriteIds((prev) => new Set([...prev, product.id]));
