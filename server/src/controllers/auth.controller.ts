@@ -72,7 +72,7 @@ function setTempOAuthCookie(res: Response, name: string, value: string) {
   res.cookie(name, value, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     maxAge: 1000 * 60 * 10,
     path: "/"
   });
@@ -82,7 +82,7 @@ function clearTempOAuthCookie(res: Response, name: string) {
   res.clearCookie(name, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     path: "/"
   });
 }
@@ -96,7 +96,7 @@ function setAuthCookie(res: Response, token: string) {
   res.cookie("jk_access_token", token, {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: env.NODE_ENV === "production" ? "none" : "lax",
     maxAge: 1000 * 60 * 60 * 24 * 7
   });
 }
@@ -105,7 +105,7 @@ function clearAuthCookie(res: Response) {
   res.clearCookie("jk_access_token", {
     httpOnly: true,
     secure: env.NODE_ENV === "production",
-    sameSite: "lax"
+    sameSite: env.NODE_ENV === "production" ? "none" : "lax"
   });
 }
 
