@@ -30,18 +30,7 @@
   --muted:           #888888;
 }
 
-/* Dark Mode — toggled via .dark class on <html> */
-.dark {
-  --background:    #1A1A2E;   /* deep navy — soft & branded */
-  --foreground:    #F0F0F0;
-  --primary:       #F3587A;   /* Hot Pink — unchanged */
-  --secondary:     #5CD6FF;   /* Electric Blue — brighter for dark */
-  --accent:        #8FDF4A;   /* Neon Green — pops on dark */
-  --highlight:     #FFD93D;
-  --card-bg:       #252540;
-  --card-border:   #3A3A5C;
-  --muted:         #AAAAAA;
-}
+
 
 /* Register all tokens with Tailwind v4 */
 @theme inline {
