@@ -1,0 +1,22 @@
+{
+  "name": "Just Kidin'",
+  "short_name": "Just Kidin'",
+  "description": "Just Kidin' kids clothing store for newborns and toddlers.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FCF5EE",
+  "theme_color": "#FCF5EE",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
