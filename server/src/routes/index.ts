@@ -6,6 +6,7 @@ import favouritesRouter from "./favourites.routes";
 import orderRouter from "./order.routes";
 import productRouter from "./product.routes";
 import reviewRouter from "./review.routes";
+import siteSettingsRouter from "./site-settings.routes";
 
 const apiRouter = Router();
 
@@ -19,6 +20,7 @@ apiRouter.use("/contact-queries", contactQueryRouter);
 apiRouter.use("/favourites", favouritesRouter);
 apiRouter.use("/orders", orderRouter);
 apiRouter.use("/products", productRouter);
+apiRouter.use("/site-settings", siteSettingsRouter);
 apiRouter.use("/reviews", reviewRouter);
 
 export default apiRouter;

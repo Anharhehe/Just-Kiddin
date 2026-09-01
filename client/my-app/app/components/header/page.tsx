@@ -126,6 +126,7 @@ export default function Header() {
   };
 
   const navLinks = [
+    { href: "/newarrivals", label: "New Arrivals" },
     { href: "/under999", label: "Under 999" },
     { href: "/accessories", label: "Accessories" },
     { href: "/contactus", label: "Contact Us" },
@@ -142,7 +143,7 @@ export default function Header() {
       <div className="w-full px-3 sm:px-6 md:px-10 lg:px-16 xl:px-[1in] transition-colors duration-300">
 
         {/* ── Mobile Row (logo / icons / hamburger) ────────────────── */}
-        <div className="flex md:hidden items-center justify-between h-22 sm:h-20 gap-2">
+        <div className="flex md:hidden items-center justify-between h-26 sm:h-20 gap-2">
           {/* Left: logo */}
           <Link href="/" className="flex-shrink-0 min-w-0">
             <Image
@@ -195,7 +196,7 @@ export default function Header() {
         </div>
 
         {/* ── Desktop Row (unchanged) ────────────────────────────────── */}
-        <div className="hidden md:flex h-24 items-center justify-between gap-6">
+        <div className="hidden md:flex h-26 items-center justify-between gap-6">
 
           {/* ── Logo ───────────────────────────────────────────────── */}
           <Link href="/" className="flex-shrink-0 min-w-0">

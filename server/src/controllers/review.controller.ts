@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma";
 
 const reviewSchema = z.object({
+  productId: z.string().trim().min(1).optional().or(z.literal("")),
   name: z.string().trim().min(2).max(120),
   city: z.string().trim().min(2).max(120),
   rating: z.number().int().min(1).max(5),
@@ -21,14 +22,17 @@ function normalizeSkip(value: unknown) {
   return Math.max(Math.trunc(parsed), 0);
 }
 
-export async function getReviews(req: { query: { limit?: string; skip?: string } }, res: Response) {
+export async function getReviews(req: { query: { limit?: string; skip?: string; productId?: string } }, res: Response) {
   const limit = normalizeLimit(req.query.limit);
   const skip = normalizeSkip(req.query.skip);
+  const productId = req.query.productId?.trim();
+  const productFilter = productId ? { productId } : { productId: null };
 
   try {
     const [total, rows] = await Promise.all([
-      prisma.review.count(),
+      prisma.review.count({ where: productFilter }),
       prisma.review.findMany({
+        where: productFilter,
         orderBy: { createdAt: "desc" },
         take: limit,
         skip,
@@ -63,8 +67,27 @@ export async function createReview(req: { body: unknown }, res: Response) {
   }
 
   try {
+    const productId = parsed.data.productId?.trim() || null;
+
+    if (productId) {
+      const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
+
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+    }
+
     const review = await prisma.review.create({
-      data: parsed.data,
+      data: {
+        productId,
+        name: parsed.data.name,
+        city: parsed.data.city,
+        rating: parsed.data.rating,
+        review: parsed.data.review,
+      },
     });
 
     return res.status(201).json({

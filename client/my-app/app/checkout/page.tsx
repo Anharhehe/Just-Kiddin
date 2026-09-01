@@ -20,7 +20,6 @@ import {
 import { useCart } from "../context/CartContext";
 import { getProductImage } from "../utils/product-image";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 const FORMSPREE_ENDPOINT = "https://formspree.io/f/maewplde";
 const DELIVERY_CHARGE = 300;
 const FREE_DELIVERY_THRESHOLD = 3000;
@@ -131,7 +130,7 @@ export default function CheckoutPage() {
 			setLoadingAccessories(true);
 
 			try {
-				const response = await fetch(`${API_BASE_URL}/api/products?ageGroup=accessories&active=true`);
+				const response = await fetch(`/api/products?ageGroup=accessories&active=true`);
 				if (!response.ok) {
 					return;
 				}

@@ -21,7 +21,6 @@ type Category = {
 };
 
 const FONT_HEADING = "'Quicksand', sans-serif";
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 
 const CATEGORIES: Category[] = [
   { slug: "rompers", label: "Rompers", image: "/demo.png" },
@@ -70,7 +69,7 @@ export default function NewbornsPage() {
 
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/products?ageGroup=newborn&gender=${genderKey}`,
+          `/api/products?ageGroup=newborn&gender=${genderKey}`,
           { signal: controller.signal }
         );
 

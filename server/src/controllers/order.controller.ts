@@ -22,6 +22,38 @@ const orderItemSchema = z.object({
   inStock: z.boolean(),
 });
 
+type VariantStockEntry = {
+  size: string | null;
+  color: string | null;
+  quantity: number;
+};
+
+function normalizeKey(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function normalizeVariantStock(value: unknown): VariantStockEntry[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
+
+      const typedEntry = entry as { size?: unknown; color?: unknown; quantity?: unknown };
+
+      return {
+        size: typeof typedEntry.size === "string" && typedEntry.size.trim().length > 0 ? typedEntry.size : null,
+        color: typeof typedEntry.color === "string" && typedEntry.color.trim().length > 0 ? typedEntry.color : null,
+        quantity: typeof typedEntry.quantity === "number" ? typedEntry.quantity : Number(typedEntry.quantity) || 0,
+      };
+    })
+    .filter((entry): entry is VariantStockEntry => Boolean(entry));
+}
+
 const createOrderSchema = z.object({
   customer: z.object({
     fullName: z.string().trim().min(2, "Full name is required").max(120),
@@ -76,6 +108,13 @@ export async function createOrder(req: { body: unknown }, res: Response) {
     return groupedItems;
   }, new Map());
 
+  const itemsByProductDetail = parsed.data.items.reduce<Map<string, typeof parsed.data.items>>((groupedItems, item) => {
+    const bucket = groupedItems.get(item.productId) ?? [];
+    bucket.push(item);
+    groupedItems.set(item.productId, bucket);
+    return groupedItems;
+  }, new Map());
+
   try {
     const [order] = await prisma.$transaction(async (tx) => {
       for (const [productId, quantity] of itemsByProduct.entries()) {
@@ -83,11 +122,13 @@ export async function createOrder(req: { body: unknown }, res: Response) {
           id: string;
           stockQuantity: number;
           name: string;
+          variantStock: unknown;
         }>>`
           SELECT
             "id",
             "stockQuantity",
-            "name"
+            "name",
+            "variantStock"
           FROM "Product"
           WHERE "id" = ${productId}
           LIMIT 1
@@ -95,6 +136,40 @@ export async function createOrder(req: { body: unknown }, res: Response) {
 
         if (!product) {
           throw new Error(`Product not found for item ${productId}`);
+        }
+
+        const productItems = itemsByProductDetail.get(productId) ?? [];
+        const variantStock = normalizeVariantStock(product.variantStock);
+
+        if (variantStock.length > 0) {
+          const nextVariantStock = variantStock.map((entry) => ({ ...entry }));
+
+          for (const item of productItems) {
+            const sizeKey = normalizeKey(item.size);
+            const colorKey = normalizeKey(item.color);
+            const match = nextVariantStock.find((entry) => normalizeKey(entry.size) === sizeKey && normalizeKey(entry.color) === colorKey);
+
+            if (!match) {
+              throw new Error(`Variant not found for ${product.name}`);
+            }
+
+            if (match.quantity < item.quantity) {
+              throw new Error(`Only ${match.quantity} items left for ${product.name}`);
+            }
+
+            match.quantity -= item.quantity;
+          }
+
+          const nextStockQuantity = nextVariantStock.reduce((sum, entry) => sum + entry.quantity, 0);
+
+          await tx.product.update({
+            where: { id: productId },
+            data: {
+              variantStock: nextVariantStock as never,
+              stockQuantity: nextStockQuantity,
+            },
+          });
+          continue;
         }
 
         if (product.stockQuantity < quantity) {

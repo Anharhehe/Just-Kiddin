@@ -13,6 +13,12 @@ export interface ProductImage {
   createdAt?: string | Date;
 }
 
+export interface VariantStockEntry {
+  size?: string | null;
+  color?: string | null;
+  quantity: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -21,10 +27,12 @@ export interface Product {
   gender: "boy" | "girl" | null;
   tags: string[];
   price: number;
+  discountPercent?: number;
   image: any;
   images?: ProductImage[];
   colors?: string[];
   sizes: string[];
+  variantStock?: VariantStockEntry[];
   inStock: boolean;
   description?: string;
   createdAt?: string | Date;

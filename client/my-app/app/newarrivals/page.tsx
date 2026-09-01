@@ -14,8 +14,15 @@ type SortOption = "Newest" | "Oldest" | "Price: Low to High" | "Price: High to L
 
 type FilterOption = {
   label: string;
-  ageGroup: AgeGroup;
-  gender: Gender;
+  ageGroup?: AgeGroup;
+  gender?: Gender;
+  accessories?: boolean;
+};
+
+type SiteSettingResponse = {
+  data?: {
+    cutoffAt?: string | null;
+  };
 };
 
 const FONT_HEADING = "'Quicksand', sans-serif";
@@ -26,6 +33,7 @@ const FILTERS: FilterOption[] = [
   { label: "Girls Newborns", ageGroup: "newborn", gender: "girls" },
   { label: "Boys Toddlers", ageGroup: "toddler", gender: "boys" },
   { label: "Girls Toddlers", ageGroup: "toddler", gender: "girls" },
+  { label: "Accessories", accessories: true },
 ];
 
 const SORT_OPTIONS: SortOption[] = ["Newest", "Oldest", "Price: Low to High", "Price: High to Low"];
@@ -40,16 +48,26 @@ function getProductDate(product: Product) {
   return toSortTimestamp((product as Product & { createdAt?: string | Date }).createdAt);
 }
 
-export default function Under999Page() {
-  const [ageGroup, setAgeGroup] = useState<AgeGroup>("newborn");
-  const [gender, setGender] = useState<Gender>("boys");
+function matchesFilter(product: Product, filter: FilterOption | null) {
+  if (!filter) {
+    return true;
+  }
+
+  if (filter.accessories) {
+    return product.ageGroup === "accessories";
+  }
+
+  return product.ageGroup === filter.ageGroup && product.gender === (filter.gender === "boys" ? "boy" : "girl");
+}
+
+export default function NewArrivalPage() {
+  const [selectedFilter, setSelectedFilter] = useState<FilterOption | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>("Newest");
   const [products, setProducts] = useState<Product[]>([]);
+  const [cutoffAt, setCutoffAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { favouriteIds, toggle: toggleFav } = useFavourites();
-
-  const genderKey = gender === "boys" ? "boy" : "girl";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -59,18 +77,21 @@ export default function Under999Page() {
       setError(null);
 
       try {
-        const response = await fetch(
-          `/api/products?ageGroup=${ageGroup}&gender=${genderKey}&active=true`,
-          { signal: controller.signal }
-        );
+        const [productsResponse, settingsResponse] = await Promise.all([
+          fetch(`/api/products?active=true`, { signal: controller.signal }),
+          fetch(`/api/site-settings/new-arrivals`, { signal: controller.signal }),
+        ]);
 
-        if (!response.ok) {
+        if (!productsResponse.ok) {
           throw new Error("Failed to load products");
         }
 
-        const payload = (await response.json()) as { data?: { products?: Product[] } };
+        const productsPayload = (await productsResponse.json()) as { data?: { products?: Product[] } };
+        const settingsPayload = (await settingsResponse.json().catch(() => null)) as SiteSettingResponse | null;
+
         if (!controller.signal.aborted) {
-          setProducts((payload.data?.products ?? []).filter((product) => product.price < 1000));
+          setProducts(productsPayload.data?.products ?? []);
+          setCutoffAt(settingsPayload?.data?.cutoffAt ?? null);
         }
       } catch (fetchError) {
         if (!controller.signal.aborted) {
@@ -86,33 +107,43 @@ export default function Under999Page() {
     void loadProducts();
 
     return () => controller.abort();
-  }, [ageGroup, genderKey]);
+  }, []);
 
   const visibleProducts = useMemo(() => {
-    const sorted = [...products];
+    const cutoffTimestamp = cutoffAt ? new Date(cutoffAt).getTime() : null;
+    const filtered = products.filter((product) => {
+      if (cutoffTimestamp && getProductDate(product) < cutoffTimestamp) {
+        return false;
+      }
+
+      return matchesFilter(product, selectedFilter);
+    });
 
     if (sortBy === "Price: Low to High") {
-      return sorted.sort((left, right) => left.price - right.price);
+      return [...filtered].sort((left, right) => left.price - right.price);
     }
 
     if (sortBy === "Price: High to Low") {
-      return sorted.sort((left, right) => right.price - left.price);
+      return [...filtered].sort((left, right) => right.price - left.price);
     }
 
     if (sortBy === "Oldest") {
-      return sorted.sort((left, right) => getProductDate(left) - getProductDate(right));
+      return [...filtered].sort((left, right) => getProductDate(left) - getProductDate(right));
     }
 
-    return sorted.sort((left, right) => getProductDate(right) - getProductDate(left));
-  }, [products, sortBy]);
+    return [...filtered].sort((left, right) => getProductDate(right) - getProductDate(left));
+  }, [cutoffAt, products, selectedFilter, sortBy]);
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_HEADING }}>
       <main className={`${CONTAINER} py-8 sm:py-10`}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8f836f]">Under PKR 1000</p>
-            <h1 className="mt-2 text-3xl font-extrabold text-[#293A55] sm:text-4xl">Our Special Budget Friendly Picks </h1>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8f836f]">New Arrivals</p>
+            <h1 className="mt-2 text-3xl font-extrabold text-[#293A55] sm:text-4xl">Freshly added picks</h1>
+            <p className="mt-2 text-sm text-[#6e6454]">
+              {cutoffAt ? `Showing products added since ${new Date(cutoffAt).toLocaleDateString()}.` : "Showing all active products until the cutoff is set from admin."}
+            </p>
           </div>
 
           <div className="relative">
@@ -132,16 +163,13 @@ export default function Under999Page() {
 
         <div className="mb-8 flex flex-wrap gap-3">
           {FILTERS.map((filter) => {
-            const active = filter.ageGroup === ageGroup && filter.gender === gender;
+            const active = selectedFilter === filter;
 
             return (
               <button
-                key={`${filter.label}-desktop`}
+                key={filter.label}
                 type="button"
-                onClick={() => {
-                  setAgeGroup(filter.ageGroup);
-                  setGender(filter.gender);
-                }}
+                onClick={() => setSelectedFilter((current) => (current === filter ? null : filter))}
                 className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? "border-[#293A55] bg-[#293A55] text-white" : "border-[#e6ddcd] bg-white text-[#293A55] hover:bg-black/[0.03]"}`}
               >
                 {filter.label}
@@ -156,8 +184,8 @@ export default function Under999Page() {
           <p className="text-sm text-[#b91c1c]">{error}</p>
         ) : visibleProducts.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-[#d9c8ae] bg-white px-6 py-14 text-center shadow-[0_16px_40px_rgba(0,0,0,0.04)]">
-            <h2 className="text-2xl font-extrabold text-[#293A55]">No products under PKR 1000 yet</h2>
-            
+            <h2 className="text-2xl font-extrabold text-[#293A55]">No new arrivals yet</h2>
+            <p className="mt-2 text-sm text-[#6e6454]">New products will appear here after the admin resets the cutoff date.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 sm:gap-x-8 sm:gap-y-12">

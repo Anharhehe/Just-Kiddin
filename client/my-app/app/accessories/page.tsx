@@ -10,7 +10,6 @@ import { getProductImage } from "../utils/product-image";
 
 type SortOption = "Newest" | "Oldest" | "Price: Low to High" | "Price: High to Low";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
 const FONT_HEADING = "'Quicksand', sans-serif";
 const CONTAINER = "mx-auto max-w-7xl px-4 sm:px-6 lg:px-8";
 
@@ -60,7 +59,7 @@ export default function AccessoriesPage() {
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/products?active=true`, {
+        const response = await fetch(`/api/products?active=true`, {
           signal: controller.signal,
         });
 

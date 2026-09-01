@@ -57,6 +57,22 @@ const PRODUCT_CATEGORIES = {
   accessories: [],
 } as const;
 
+const NEWBORN_SIZE_OPTIONS = ["0-3M", "3-6M", "6-9M", "9-12M"] as const;
+const TODDLER_SIZE_OPTIONS = ["1-2Y", "2-3Y", "3-4Y", "4-5Y", "5-6Y"] as const;
+
+const COLOR_PRESETS = [
+  "#111827",
+  "#1D4ED8",
+  "#DC2626",
+  "#F59E0B",
+  "#16A34A",
+  "#7C3AED",
+  "#0F766E",
+  "#D946EF",
+  "#F97316",
+  "#F8FAFC",
+] as const;
+
 type SidebarSection = (typeof SIDEBAR_ITEMS)[number]["id"];
 
 type MeResponse = {
@@ -89,10 +105,17 @@ type ProductImage = {
   position: number;
 };
 
-type DraftImage = {
+type ColorImageDraft = {
   id: string;
+  color: string;
   file: File;
   previewUrl: string;
+};
+
+type VariantStockEntry = {
+  size: string | null;
+  color: string | null;
+  quantity: number;
 };
 
 type Product = {
@@ -103,9 +126,11 @@ type Product = {
   gender: "boy" | "girl" | null;
   tags: string[];
   price: number;
+  discountPercent?: number;
   description?: string | null;
   sizes: string[];
   colors: string[];
+  variantStock: VariantStockEntry[];
   stockQuantity: number;
   lowStockThreshold: number;
   isActive: boolean;
@@ -201,6 +226,12 @@ type QueryResponse = {
   };
 };
 
+type SiteSettingResponse = {
+  data?: {
+    cutoffAt?: string | null;
+  };
+};
+
 type QueryView = "unread" | "read" | "all";
 
 type CustomerDetailResponse = {
@@ -224,9 +255,11 @@ type ProductFormState = {
   gender: "boy" | "girl" | null;
   tags: string;
   price: string;
+  discountPercent: string;
   description: string;
-  sizes: string;
-  colors: string;
+  sizes: string[];
+  colors: string[];
+  variantStock: VariantStockEntry[];
   stockQuantity: string;
   lowStockThreshold: string;
   isActive: boolean;
@@ -240,9 +273,11 @@ const emptyForm: ProductFormState = {
   gender: "boy" as "boy" | "girl" | null,
   tags: "",
   price: "",
+  discountPercent: "15",
   description: "",
-  sizes: "",
-  colors: "",
+  sizes: [],
+  colors: [],
+  variantStock: [],
   stockQuantity: "0",
   lowStockThreshold: "5",
   isActive: true,
@@ -283,6 +318,121 @@ function parseCommaList(value: string) {
 
 function commaJoin(values: string[]) {
   return values.join(", ");
+}
+
+function getSizeOptions(ageGroup: ProductFormState["ageGroup"]) {
+  if (ageGroup === "newborn") {
+    return NEWBORN_SIZE_OPTIONS;
+  }
+
+  if (ageGroup === "toddler") {
+    return TODDLER_SIZE_OPTIONS;
+  }
+
+  return [] as const;
+}
+
+function sanitizeSizesForAgeGroup(ageGroup: ProductFormState["ageGroup"], sizes: string[]) {
+  return sizes.filter((size) => getSizeOptions(ageGroup).includes(size as never));
+}
+
+function isHexColor(value: string) {
+  return /^#[0-9a-fA-F]{6}$/.test(value);
+}
+
+function normalizeColors(values: string[]) {
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => (isHexColor(value) ? value.toUpperCase() : value));
+}
+
+function normalizeVariantStockEntry(entry: Partial<VariantStockEntry>): VariantStockEntry {
+  return {
+    size: entry.size?.trim() || null,
+    color: entry.color?.trim() || null,
+    quantity: Math.max(0, Number(entry.quantity) || 0),
+  };
+}
+
+function reconcileVariantStock(entries: VariantStockEntry[], sizes: string[], colors: string[]) {
+  const sizeValues = sizes.length > 0 ? sizes : [null];
+  const colorValues = colors.length > 0 ? colors : [null];
+
+  return sizeValues.flatMap((size) => {
+    return colorValues.map((color) => {
+      const existing = entries.find((entry) => entry.size === size && entry.color === color);
+      return normalizeVariantStockEntry({ size, color, quantity: existing?.quantity ?? 0 });
+    });
+  });
+}
+
+function calculateVariantStockTotal(entries: VariantStockEntry[]) {
+  return entries.reduce((sum, entry) => sum + entry.quantity, 0);
+}
+
+function updateVariantStockQuantity(
+  entries: VariantStockEntry[],
+  sizes: string[],
+  colors: string[],
+  size: string | null,
+  color: string | null,
+  quantity: number
+) {
+  const next = reconcileVariantStock(entries, sizes, colors);
+  const target = next.find((entry) => entry.size === size && entry.color === color);
+
+  if (target) {
+    target.quantity = Math.max(0, quantity);
+  }
+
+  return next;
+}
+
+function buildInitialVariantStock(product: {
+  sizes: string[];
+  colors: string[];
+  variantStock?: VariantStockEntry[];
+  stockQuantity: number;
+}) {
+  const normalized = Array.isArray(product.variantStock) && product.variantStock.length > 0
+    ? reconcileVariantStock(product.variantStock.map(normalizeVariantStockEntry), product.sizes, product.colors)
+    : reconcileVariantStock([], product.sizes, product.colors);
+
+  if (normalized.some((entry) => entry.quantity > 0)) {
+    return normalized;
+  }
+
+  if (normalized.length > 0) {
+    normalized[0] = {
+      ...normalized[0],
+      quantity: product.stockQuantity,
+    };
+  }
+
+  return normalized;
+}
+
+function formatColorLabel(value: string) {
+  return isHexColor(value) ? value.toUpperCase() : value;
+}
+
+function calculateCompareAtPrice(price: string | number, discountPercent: string | number) {
+  const numericPrice = Number(price) || 0;
+  const numericDiscount = Math.min(100, Math.max(0, Number(discountPercent) || 0));
+
+  if (numericDiscount <= 0 || numericDiscount >= 100) {
+    return numericPrice;
+  }
+
+  return Math.round(numericPrice / (1 - numericDiscount / 100));
+}
+
+function formatVariantLabel(size: string | null, color: string | null) {
+  const sizeLabel = size ?? "General";
+  const colorLabel = color ?? "General";
+
+  return `${sizeLabel} • ${colorLabel}`;
 }
 
 function getCategories(ageGroup: "newborn" | "toddler" | "accessories") {
@@ -328,7 +478,7 @@ export default function AdminPage() {
   const [orderToDate, setOrderToDate] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
-  const [productDraftImages, setProductDraftImages] = useState<DraftImage[]>([]);
+  const [colorImageDrafts, setColorImageDrafts] = useState<ColorImageDraft[]>([]);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [reviewForm, setReviewForm] = useState<ReviewFormState>(emptyReviewForm);
   const [savingProduct, setSavingProduct] = useState(false);
@@ -338,8 +488,12 @@ export default function AdminPage() {
   const [reviewSearch, setReviewSearch] = useState("");
   const [querySearch, setQuerySearch] = useState("");
   const [queryView, setQueryView] = useState<QueryView>("unread");
+  const [newArrivalsCutoff, setNewArrivalsCutoff] = useState<string | null>(null);
+  const [savingNewArrivals, setSavingNewArrivals] = useState(false);
   const [inventoryOnlyLowStock, setInventoryOnlyLowStock] = useState(false);
-  const draftImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [colorPickerValue, setColorPickerValue] = useState("#111827");
+  const colorImageInputRef = useRef<HTMLInputElement | null>(null);
+  const [pendingColorUpload, setPendingColorUpload] = useState<string | null>(null);
 
   const noticeTone = useMemo(() => {
     if (!notice) {
@@ -352,6 +506,16 @@ export default function AdminPage() {
   const selectedProduct = useMemo(
     () => products.find((product) => product.id === selectedProductId) ?? null,
     [products, selectedProductId]
+  );
+
+  const variantStockGrid = useMemo(
+    () => reconcileVariantStock(form.variantStock, form.sizes, form.colors),
+    [form.colors, form.sizes, form.variantStock]
+  );
+
+  const variantStockTotal = useMemo(
+    () => calculateVariantStockTotal(variantStockGrid),
+    [variantStockGrid]
   );
 
   const categoryOptions = useMemo(() => getCategories(form.ageGroup), [form.ageGroup]);
@@ -391,23 +555,26 @@ export default function AdminPage() {
 
   async function refreshDashboard() {
     try {
-      const [overviewResponse, productsResponse, customersResponse] = await Promise.all([
+      const [overviewResponse, productsResponse, customersResponse, settingsResponse] = await Promise.all([
         apiFetch("/admin/overview"),
         apiFetch("/admin/products"),
         apiFetch("/admin/customers?limit=50"),
+        apiFetch("/site-settings/new-arrivals"),
       ]);
 
-      if (!overviewResponse.ok || !productsResponse.ok || !customersResponse.ok) {
+      if (!overviewResponse.ok || !productsResponse.ok || !customersResponse.ok || !settingsResponse.ok) {
         throw new Error("Failed to load admin dashboard");
       }
 
       const overviewJson = (await overviewResponse.json()) as DashboardResponse;
       const productsJson = (await productsResponse.json()) as DashboardResponse;
       const customersJson = (await customersResponse.json()) as DashboardResponse;
+      const settingsJson = (await settingsResponse.json()) as SiteSettingResponse;
 
       setOverview(overviewJson.data?.overview ?? null);
       setProducts(productsJson.data?.products ?? []);
       setCustomers(customersJson.data?.customers ?? []);
+      setNewArrivalsCutoff(settingsJson.data?.cutoffAt ?? null);
       setNotice(null);
 
       const nextEmail = selectedCustomerEmail ?? customersJson.data?.customers?.[0]?.email ?? null;
@@ -498,6 +665,29 @@ export default function AdminPage() {
     }
   }
 
+  async function refreshNewArrivalsCutoff() {
+    setSavingNewArrivals(true);
+
+    try {
+      const response = await apiFetch("/site-settings/new-arrivals", {
+        method: "PATCH",
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.message || "Failed to update new arrivals cutoff");
+      }
+
+      const payload = (await response.json()) as SiteSettingResponse;
+      setNewArrivalsCutoff(payload.data?.cutoffAt ?? null);
+      setNotice("New arrivals cutoff updated successfully");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to update new arrivals cutoff");
+    } finally {
+      setSavingNewArrivals(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -557,14 +747,20 @@ export default function AdminPage() {
       gender: selectedProduct.gender,
       tags: commaJoin(selectedProduct.tags),
       price: String(selectedProduct.price),
+      discountPercent: String(selectedProduct.discountPercent ?? 15),
       description: selectedProduct.description ?? "",
-      sizes: commaJoin(selectedProduct.sizes),
-      colors: commaJoin(selectedProduct.colors),
+      sizes: sanitizeSizesForAgeGroup(selectedProduct.ageGroup, selectedProduct.sizes),
+      colors: normalizeColors(selectedProduct.colors),
+      variantStock: buildInitialVariantStock(selectedProduct),
       stockQuantity: String(selectedProduct.stockQuantity),
       lowStockThreshold: String(selectedProduct.lowStockThreshold),
       isActive: selectedProduct.isActive,
       isFeatured: selectedProduct.isFeatured,
     });
+    const firstColor = selectedProduct.colors.find((color) => isHexColor(color));
+    if (firstColor) {
+      setColorPickerValue(firstColor.toUpperCase());
+    }
   }, [selectedProduct]);
 
   useEffect(() => {
@@ -598,50 +794,124 @@ export default function AdminPage() {
   function startNewProduct() {
     setSelectedProductId(null);
     setForm({ ...emptyForm, category: getCategories(emptyForm.ageGroup)[0] ?? null, gender: "boy" });
-    setProductDraftImages([]);
+    setColorPickerValue("#111827");
+    setColorImageDrafts([]);
+    setPendingColorUpload(null);
     setActiveSection("products");
     setNotice(null);
   }
 
-  function appendDraftImages(files: File[]) {
-    if (files.length === 0) {
+  function toggleSize(size: string) {
+    setForm((current) => ({
+      ...current,
+      sizes: current.sizes.includes(size)
+        ? current.sizes.filter((value) => value !== size)
+        : [...current.sizes, size],
+      variantStock: reconcileVariantStock(
+        current.variantStock,
+        current.sizes.includes(size)
+          ? current.sizes.filter((value) => value !== size)
+          : [...current.sizes, size],
+        current.colors
+      ),
+    }));
+  }
+
+  function addColor(color: string) {
+    const normalized = color.trim().toUpperCase();
+
+    if (!normalized || !isHexColor(normalized)) {
       return;
     }
 
-    setProductDraftImages((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: window.crypto.randomUUID(),
-        file,
-        previewUrl: URL.createObjectURL(file),
-      })),
-    ]);
+    setForm((current) => {
+      if (current.colors.includes(normalized)) {
+        return current;
+      }
+
+      return {
+        ...current,
+        colors: [...current.colors, normalized],
+        variantStock: reconcileVariantStock(current.variantStock, current.sizes, [...current.colors, normalized]),
+      };
+    });
+
+    setColorPickerValue(normalized);
   }
 
-  function removeDraftImage(imageId: string) {
-    setProductDraftImages((current) => {
-      const removed = current.find((image) => image.id === imageId);
+  function removeColor(color: string) {
+    setForm((current) => ({
+      ...current,
+      colors: current.colors.filter((value) => value !== color),
+      variantStock: reconcileVariantStock(
+        current.variantStock,
+        current.sizes,
+        current.colors.filter((value) => value !== color)
+      ),
+    }));
+
+    setColorImageDrafts((current) => {
+      const removed = current.find((draft) => draft.color === color);
 
       if (removed) {
         URL.revokeObjectURL(removed.previewUrl);
       }
 
-      return current.filter((image) => image.id !== imageId);
+      return current.filter((draft) => draft.color !== color);
     });
   }
 
-  function clearDraftImages() {
-    setProductDraftImages((current) => {
-      current.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  function openColorImagePicker(color: string) {
+    setPendingColorUpload(color);
+    colorImageInputRef.current?.click();
+  }
+
+  function setDraftImageForColor(color: string, file: File) {
+    setColorImageDrafts((current) => {
+      const existing = current.find((draft) => draft.color === color);
+
+      if (existing) {
+        URL.revokeObjectURL(existing.previewUrl);
+      }
+
+      const nextDraft = {
+        id: existing?.id ?? window.crypto.randomUUID(),
+        color,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      };
+
+      return [...current.filter((draft) => draft.color !== color), nextDraft];
+    });
+  }
+
+  function clearColorDraftImages() {
+    setColorImageDrafts((current) => {
+      current.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
       return [];
     });
 
-    if (draftImageInputRef.current) {
-      draftImageInputRef.current.value = "";
+    setPendingColorUpload(null);
+
+    if (colorImageInputRef.current) {
+      colorImageInputRef.current.value = "";
     }
   }
 
-  async function uploadFilesToProduct(productId: string, files: DraftImage[], existingImagesCount: number) {
+  function handleColorImageSelection(files: File[]) {
+    if (files.length === 0 || !pendingColorUpload) {
+      return;
+    }
+
+    setDraftImageForColor(pendingColorUpload, files[0]);
+    setPendingColorUpload(null);
+
+    if (colorImageInputRef.current) {
+      colorImageInputRef.current.value = "";
+    }
+  }
+
+  async function uploadFilesToProduct(productId: string, files: ColorImageDraft[], existingImagesCount: number) {
     if (files.length === 0) {
       return;
     }
@@ -652,7 +922,7 @@ export default function AdminPage() {
       const draftImage = files[index];
       const body = new FormData();
       body.append("files", draftImage.file);
-      body.append("altText", form.name.trim());
+      body.append("altText", `${form.name.trim()} - ${draftImage.color}`);
       body.append("position", String(existingImagesCount + index));
       body.append("isPrimary", String(existingImagesCount === 0 && index === 0));
 
@@ -677,6 +947,15 @@ export default function AdminPage() {
     setSavingProduct(true);
     setNotice(null);
 
+    if (form.ageGroup !== "accessories" && form.colors.length > 0 && selectedProductId === null && colorImageDrafts.length !== form.colors.length) {
+      setNotice("Select one image for each selected color before saving the product.");
+      setSavingProduct(false);
+      return;
+    }
+
+    const nextVariantStock = reconcileVariantStock(form.variantStock, form.sizes, form.colors);
+    const nextStockQuantity = calculateVariantStockTotal(nextVariantStock);
+
     const payload = {
       name: form.name.trim(),
       category: form.ageGroup === "accessories" ? null : form.category?.trim() ?? null,
@@ -684,10 +963,12 @@ export default function AdminPage() {
       gender: form.ageGroup === "accessories" ? null : form.gender,
       tags: parseCommaList(form.tags),
       price: Number(form.price),
-      description: form.description.trim(),
-      sizes: parseCommaList(form.sizes),
-      colors: parseCommaList(form.colors),
-      stockQuantity: Number(form.stockQuantity),
+      discountPercent: Number(form.discountPercent),
+      description: form.description,
+      sizes: form.sizes,
+      colors: form.colors,
+      variantStock: nextVariantStock,
+      stockQuantity: nextStockQuantity,
       lowStockThreshold: Number(form.lowStockThreshold),
       isActive: form.isActive,
       isFeatured: form.isFeatured,
@@ -710,13 +991,13 @@ export default function AdminPage() {
 
       setSelectedProductId(nextProductId);
 
-      if (nextProductId && productDraftImages.length > 0) {
-        await uploadFilesToProduct(nextProductId, productDraftImages, savedProduct?.images?.length ?? 0);
-        clearDraftImages();
+      if (nextProductId && colorImageDrafts.length > 0) {
+        await uploadFilesToProduct(nextProductId, colorImageDrafts, savedProduct?.images?.length ?? 0);
+        clearColorDraftImages();
       }
 
       setNotice(
-        productDraftImages.length > 0
+        colorImageDrafts.length > 0
           ? (selectedProductId ? "Product updated successfully with images uploaded" : "Product created successfully with images uploaded")
           : (selectedProductId ? "Product updated successfully" : "Product created successfully")
       );
@@ -1330,7 +1611,26 @@ export default function AdminPage() {
           ) : null}
 
           {activeSection === "products" ? (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <div className="space-y-6">
+              <div className="flex flex-col gap-3 rounded-[28px] border border-black/5 bg-[#fffaf2] p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--foreground)]">New Arrivals Control</p>
+                    <p className="text-sm text-[var(--muted)]">
+                      {newArrivalsCutoff ? `Products created after ${formatDate(newArrivalsCutoff)} will appear on the New Arrivals page.` : "All active products currently appear on the New Arrivals page."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshNewArrivalsCutoff}
+                    disabled={savingNewArrivals}
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                  >
+                    {savingNewArrivals ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />} Set new arrivals from now
+                  </button>
+                </div>
+              </div>
+
               <SectionCard title="Product Management" subtitle="Use dropdowns for available categories, then upload images from your file explorer.">
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Name"><input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} className={INPUT_CLASS} /></Field>
@@ -1344,6 +1644,8 @@ export default function AdminPage() {
                           ageGroup: nextAgeGroup,
                           category: nextAgeGroup === "accessories" ? null : getCategories(nextAgeGroup)[0] ?? null,
                           gender: nextAgeGroup === "accessories" ? null : current.gender ?? "boy",
+                          sizes: [],
+                          variantStock: reconcileVariantStock(current.variantStock, [], current.colors),
                         }));
                       }}
                       className={INPUT_CLASS}
@@ -1388,9 +1690,279 @@ export default function AdminPage() {
                     </select>
                   </Field>
                   <Field label="Price"><input type="number" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} className={INPUT_CLASS} /></Field>
-                  <Field label="Sizes"><input value={form.sizes} onChange={(event) => setForm((current) => ({ ...current, sizes: event.target.value }))} placeholder="0-6M, 6-12M, 1-2Y" className={INPUT_CLASS} /></Field>
-                  <Field label="Colors"><input value={form.colors} onChange={(event) => setForm((current) => ({ ...current, colors: event.target.value }))} placeholder="Cream, Navy, Sage" className={INPUT_CLASS} /></Field>
-                  <Field label="Stock quantity"><input type="number" value={form.stockQuantity} onChange={(event) => setForm((current) => ({ ...current, stockQuantity: event.target.value }))} className={INPUT_CLASS} /></Field>
+                  <Field label="Discount (%)">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.discountPercent}
+                      onChange={(event) => setForm((current) => ({ ...current, discountPercent: event.target.value }))}
+                      className={INPUT_CLASS}
+                    />
+                  </Field>
+                  <div className="rounded-3xl border border-dashed border-[#e7d7bf] bg-[#fffaf2] px-4 py-3 text-sm text-[var(--muted)] md:col-span-2">
+                    Displayed price: <span className="font-semibold text-[var(--foreground)]">{formatMoney(calculateCompareAtPrice(form.price, form.discountPercent))}</span>
+                  </div>
+                  {form.ageGroup !== "accessories" ? (
+                    <Field label="Sizes" className="md:col-span-2">
+                      <div className="space-y-5 rounded-3xl border border-black/5 bg-[#fffaf2] p-4">
+                        <div className="space-y-3">
+                          <p className="text-sm font-semibold text-[var(--foreground)]">
+                            {form.ageGroup === "newborn" ? "Newborn sizes" : "Toddler sizes"}
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {getSizeOptions(form.ageGroup).map((option) => {
+                              const checked = form.sizes.includes(option);
+
+                              return (
+                                <label
+                                  key={option}
+                                  className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-3 py-2.5 text-sm transition ${checked ? "border-[#8b5a2b] bg-white shadow-sm" : "border-black/10 bg-white/80 hover:border-[#8b5a2b]/40"}`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleSize(option)}
+                                    className="h-4 w-4 accent-[#8b5a2b]"
+                                  />
+                                  <span className="font-medium text-[var(--foreground)]">{option}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <p className="text-xs text-[var(--muted)]">Select every size you want to show on the product page.</p>
+                      </div>
+                    </Field>
+                  ) : null}
+                  <Field label="Colors" className="md:col-span-2">
+                    <div className="space-y-4 rounded-3xl border border-black/5 bg-[#fffaf2] p-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          type="color"
+                          value={colorPickerValue}
+                          onChange={(event) => setColorPickerValue(event.target.value.toUpperCase())}
+                          className="h-11 w-16 cursor-pointer rounded-2xl border border-black/10 bg-white p-1"
+                          aria-label="Pick a color"
+                        />
+                        <input
+                          type="text"
+                          value={colorPickerValue}
+                          onChange={(event) => setColorPickerValue(event.target.value.toUpperCase())}
+                          placeholder="#111827"
+                          className={INPUT_CLASS}
+                          style={{ maxWidth: "10rem" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addColor(colorPickerValue)}
+                          className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-4 text-sm font-semibold text-white transition hover:opacity-90"
+                        >
+                          Add color
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {form.colors.length > 0 ? (
+                          form.colors.map((color) => {
+                            const draftImage = colorImageDrafts.find((draft) => draft.color === color) ?? null;
+
+                            return (
+                              <div key={color} className="rounded-3xl border border-black/10 bg-white p-3">
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: color }} />
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-semibold text-[var(--foreground)]">{formatColorLabel(color)}</p>
+                                    <p className="text-xs text-[var(--muted)]">Upload one image for this color</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => openColorImagePicker(color)}
+                                    className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-4 text-sm font-semibold text-white transition hover:opacity-90"
+                                  >
+                                    {draftImage ? "Change image" : "Upload image"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeColor(color)}
+                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+
+                                <div className="mt-3">
+                                  {draftImage ? (
+                                    <article className="overflow-hidden rounded-2xl border border-black/5 bg-[#fffaf2] shadow-sm">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={draftImage.previewUrl} alt={`${color} preview`} className="h-36 w-full object-cover" />
+                                      <div className="p-3">
+                                        <p className="truncate text-sm font-semibold text-[var(--foreground)]">{draftImage.file.name}</p>
+                                        <p className="mt-1 text-xs text-[var(--muted)]">Linked to {formatColorLabel(color)}</p>
+                                      </div>
+                                    </article>
+                                  ) : (
+                                    <div className="rounded-2xl border border-dashed border-black/10 bg-[#fffaf2] p-4 text-sm text-[var(--muted)]">
+                                      No image uploaded yet for this color.
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-sm text-[var(--muted)]">No colors selected yet. Pick a color and click Add color.</p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        {COLOR_PRESETS.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => addColor(preset)}
+                            className="h-8 w-8 rounded-full border border-black/10 shadow-sm transition hover:scale-105"
+                            style={{ backgroundColor: preset }}
+                            aria-label={`Add ${preset} color`}
+                            title={preset}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </Field>
+                  <Field label="Stock by variant" className="md:col-span-2">
+                    <div className="space-y-4 rounded-3xl border border-black/5 bg-[#fffaf2] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[var(--foreground)]">Variant stock matrix</p>
+                          <p className="text-xs text-[var(--muted)]">Enter stock for each size/color combination. The total is saved automatically.</p>
+                        </div>
+                        <div className="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-[var(--foreground)] shadow-sm">
+                          Total stock: {variantStockTotal}
+                        </div>
+                      </div>
+
+                      <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white">
+                        {form.sizes.length > 0 && form.colors.length > 0 ? (
+                          <table className="min-w-full border-collapse text-left text-sm">
+                            <thead className="bg-[#fff8ef] text-[var(--foreground)]">
+                              <tr>
+                                <th className="px-4 py-3 font-semibold">Size</th>
+                                {form.colors.map((color) => (
+                                  <th key={color} className="px-4 py-3 font-semibold">
+                                    <div className="flex items-center gap-2">
+                                      <span className="h-4 w-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />
+                                      <span>{formatColorLabel(color)}</span>
+                                    </div>
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {form.sizes.map((size) => (
+                                <tr key={size} className="border-t border-black/5">
+                                  <td className="px-4 py-3 font-semibold text-[var(--foreground)]">{size}</td>
+                                  {form.colors.map((color) => {
+                                    const entry = variantStockGrid.find((item) => item.size === size && item.color === color) ?? { quantity: 0 };
+
+                                    return (
+                                      <td key={`${size}-${color}`} className="px-4 py-3">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={entry.quantity}
+                                          onChange={(event) => {
+                                            const quantity = Number(event.target.value);
+                                            setForm((current) => ({
+                                              ...current,
+                                              variantStock: updateVariantStockQuantity(current.variantStock, current.sizes, current.colors, size, color, quantity),
+                                            }));
+                                          }}
+                                          className="h-10 w-24 rounded-xl border border-black/10 px-3 text-sm outline-none focus:border-[#8b5a2b]"
+                                        />
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : form.sizes.length > 0 ? (
+                          <div className="space-y-2 p-4">
+                            {form.sizes.map((size) => {
+                              const entry = variantStockGrid.find((item) => item.size === size && item.color === null) ?? { quantity: 0 };
+
+                              return (
+                                <div key={size} className="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-[#fffaf2] px-3 py-2.5">
+                                  <span className="font-medium text-[var(--foreground)]">{size}</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={entry.quantity}
+                                    onChange={(event) => {
+                                      const quantity = Number(event.target.value);
+                                      setForm((current) => ({
+                                        ...current,
+                                        variantStock: updateVariantStockQuantity(current.variantStock, current.sizes, current.colors, size, null, quantity),
+                                      }));
+                                    }}
+                                    className="h-10 w-24 rounded-xl border border-black/10 px-3 text-sm outline-none focus:border-[#8b5a2b]"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : form.colors.length > 0 ? (
+                          <div className="space-y-2 p-4">
+                            {form.colors.map((color) => {
+                              const entry = variantStockGrid.find((item) => item.size === null && item.color === color) ?? { quantity: 0 };
+
+                              return (
+                                <div key={color} className="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-[#fffaf2] px-3 py-2.5">
+                                  <span className="flex items-center gap-2 font-medium text-[var(--foreground)]">
+                                    <span className="h-4 w-4 rounded-full border border-black/10" style={{ backgroundColor: color }} />
+                                    {formatColorLabel(color)}
+                                  </span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={entry.quantity}
+                                    onChange={(event) => {
+                                      const quantity = Number(event.target.value);
+                                      setForm((current) => ({
+                                        ...current,
+                                        variantStock: updateVariantStockQuantity(current.variantStock, current.sizes, current.colors, null, color, quantity),
+                                      }));
+                                    }}
+                                    className="h-10 w-24 rounded-xl border border-black/10 px-3 text-sm outline-none focus:border-[#8b5a2b]"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="p-4">
+                            <div className="flex items-center justify-between gap-3 rounded-2xl border border-black/5 bg-[#fffaf2] px-3 py-2.5">
+                              <span className="font-medium text-[var(--foreground)]">General stock</span>
+                              <input
+                                type="number"
+                                min="0"
+                                value={variantStockGrid[0]?.quantity ?? 0}
+                                onChange={(event) => {
+                                  const quantity = Number(event.target.value);
+                                  setForm((current) => ({
+                                    ...current,
+                                    variantStock: updateVariantStockQuantity(current.variantStock, current.sizes, current.colors, null, null, quantity),
+                                  }));
+                                }}
+                                className="h-10 w-24 rounded-xl border border-black/10 px-3 text-sm outline-none focus:border-[#8b5a2b]"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Field>
                   <Field label="Low stock threshold"><input type="number" value={form.lowStockThreshold} onChange={(event) => setForm((current) => ({ ...current, lowStockThreshold: event.target.value }))} className={INPUT_CLASS} /></Field>
                   <Field label="Tags" className="md:col-span-2"><input value={form.tags} onChange={(event) => setForm((current) => ({ ...current, tags: event.target.value }))} placeholder="winter, essentials" className={INPUT_CLASS} /></Field>
                   <Field label="Description" className="md:col-span-2"><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} className={`${INPUT_CLASS} min-h-[110px] py-3`} /></Field>
@@ -1403,7 +1975,7 @@ export default function AdminPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => draftImageInputRef.current?.click()}
+                          onClick={() => colorImageInputRef.current?.click()}
                           className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-4 text-sm font-semibold text-white transition hover:opacity-90"
                         >
                           <ImagePlus className="h-4 w-4" />
@@ -1412,26 +1984,35 @@ export default function AdminPage() {
                       </div>
 
                       <input
-                        ref={draftImageInputRef}
+                        ref={colorImageInputRef}
                         type="file"
                         accept="image/*"
-                        multiple
                         className="hidden"
                         onChange={(event) => {
-                          appendDraftImages(Array.from(event.target.files ?? []));
+                          handleColorImageSelection(Array.from(event.target.files ?? []));
                           event.currentTarget.value = "";
                         }}
                       />
 
-                      {productDraftImages.length > 0 ? (
+                      {colorImageDrafts.length > 0 ? (
                         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                          {productDraftImages.map((draftImage) => (
+                          {colorImageDrafts.map((draftImage) => (
                             <article key={draftImage.id} className="group relative overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={draftImage.previewUrl} alt={draftImage.file.name} className="h-36 w-full object-cover" />
                               <button
                                 type="button"
-                                onClick={() => removeDraftImage(draftImage.id)}
+                                onClick={() => {
+                                  setColorImageDrafts((current) => {
+                                    const removed = current.find((image) => image.id === draftImage.id);
+
+                                    if (removed) {
+                                      URL.revokeObjectURL(removed.previewUrl);
+                                    }
+
+                                    return current.filter((image) => image.id !== draftImage.id);
+                                  });
+                                }}
                                 className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-black/70 text-white transition hover:bg-rose-600"
                                 aria-label={`Remove ${draftImage.file.name}`}
                               >
@@ -1439,21 +2020,21 @@ export default function AdminPage() {
                               </button>
                               <div className="p-3">
                                 <p className="truncate text-sm font-semibold text-[var(--foreground)]">{draftImage.file.name}</p>
-                                <p className="mt-1 text-xs text-[var(--muted)]">Click X to remove before saving</p>
+                                <p className="mt-1 text-xs text-[var(--muted)]">Linked to {formatColorLabel(draftImage.color)} • Click X to remove before saving</p>
                               </div>
                             </article>
                           ))}
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-dashed border-black/10 bg-white p-6 text-sm text-[var(--muted)]">
-                          No images selected yet. Click Add more to start.
+                          No color-linked images selected yet. Choose a color and upload its image.
                         </div>
                       )}
 
                       <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
-                        <p>{productDraftImages.length} draft image{productDraftImages.length === 1 ? "" : "s"} ready to save.</p>
-                        {productDraftImages.length > 0 ? (
-                          <button type="button" onClick={clearDraftImages} className="font-semibold text-[#8b5a2b] hover:underline">
+                        <p>{colorImageDrafts.length} color-linked image{colorImageDrafts.length === 1 ? "" : "s"} ready to save.</p>
+                        {colorImageDrafts.length > 0 ? (
+                          <button type="button" onClick={clearColorDraftImages} className="font-semibold text-[#8b5a2b] hover:underline">
                             Clear all
                           </button>
                         ) : null}
@@ -1477,42 +2058,40 @@ export default function AdminPage() {
                 </div>
               </SectionCard>
 
-              <div className="space-y-6">
-                <SectionCard title="Product Library" subtitle="Edit or delete products, and review stock in one place.">
-                  <div className="mb-4 flex items-center gap-2 rounded-full border border-black/5 bg-white px-4 py-3">
-                    <Search className="h-4 w-4 text-[var(--muted)]" />
-                    <input value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products" className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" />
-                  </div>
+              <SectionCard title="Product Library" subtitle="Edit or delete products, and review stock in one place.">
+                <div className="mb-4 flex items-center gap-2 rounded-full border border-black/5 bg-white px-4 py-3">
+                  <Search className="h-4 w-4 text-[var(--muted)]" />
+                  <input value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products" className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" />
+                </div>
 
-                    <div className="max-h-[65rem] space-y-3 overflow-y-auto pr-2">
-                    {filteredProducts.map((product) => (
-                      <article key={product.id} className={`rounded-3xl border p-4 transition ${selectedProductId === product.id ? "border-[#8b5a2b] bg-[#fff8ef]" : "border-black/5 bg-white"}`}>
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-[var(--foreground)]">{product.name}</p>
-                              {product.isFeatured ? <span className="rounded-full bg-[#fff0d7] px-2 py-0.5 text-xs font-semibold text-[#8b5a2b]">Featured</span> : null}
-                              {!product.isActive ? <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs font-semibold text-[#b91c1c]">Inactive</span> : null}
-                            </div>
-                            <p className="mt-1 text-sm text-[var(--muted)]">{product.category} • {product.ageGroup} • {product.gender}</p>
-                            <p className="mt-1 text-xs text-[var(--muted)]">Stock {product.stockQuantity} • Low stock threshold {product.lowStockThreshold}</p>
-                          </div>
+                <div className="max-h-[65rem] space-y-3 overflow-y-auto pr-2">
+                  {filteredProducts.map((product) => (
+                    <article key={product.id} className={`rounded-3xl border p-4 transition ${selectedProductId === product.id ? "border-[#8b5a2b] bg-[#fff8ef]" : "border-black/5 bg-white"}`}>
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <button type="button" onClick={() => { setSelectedProductId(product.id); setActiveSection("products"); }} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5">
-                              <Edit3 className="h-4 w-4" /> Edit
-                            </button>
-                            <button type="button" onClick={() => deleteProduct(product.id).catch((error) => setNotice(error instanceof Error ? error.message : "Failed to delete product"))} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[#fecaca] bg-[#fff5f5] px-4 text-sm font-semibold text-[#b91c1c] transition hover:bg-[#ffecec]">
-                              <Trash2 className="h-4 w-4" /> Delete
-                            </button>
+                            <p className="font-semibold text-[var(--foreground)]">{product.name}</p>
+                            {product.isFeatured ? <span className="rounded-full bg-[#fff0d7] px-2 py-0.5 text-xs font-semibold text-[#8b5a2b]">Featured</span> : null}
+                            {!product.isActive ? <span className="rounded-full bg-[#fee2e2] px-2 py-0.5 text-xs font-semibold text-[#b91c1c]">Inactive</span> : null}
                           </div>
+                          <p className="mt-1 text-sm text-[var(--muted)]">{product.category} • {product.ageGroup} • {product.gender}</p>
+                          <p className="mt-1 text-xs text-[var(--muted)]">Stock {product.stockQuantity} • Low stock threshold {product.lowStockThreshold}</p>
                         </div>
-                      </article>
-                    ))}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button type="button" onClick={() => { setSelectedProductId(product.id); setActiveSection("products"); }} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5">
+                            <Edit3 className="h-4 w-4" /> Edit
+                          </button>
+                          <button type="button" onClick={() => deleteProduct(product.id).catch((error) => setNotice(error instanceof Error ? error.message : "Failed to delete product"))} className="inline-flex h-10 items-center gap-2 rounded-2xl border border-[#fecaca] bg-[#fff5f5] px-4 text-sm font-semibold text-[#b91c1c] transition hover:bg-[#ffecec]">
+                            <Trash2 className="h-4 w-4" /> Delete
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
 
-                    {filteredProducts.length === 0 ? <div className="rounded-2xl border border-dashed border-black/10 p-6 text-sm text-[var(--muted)]">No products found.</div> : null}
-                  </div>
-                </SectionCard>
-              </div>
+                  {filteredProducts.length === 0 ? <div className="rounded-2xl border border-dashed border-black/10 p-6 text-sm text-[var(--muted)]">No products found.</div> : null}
+                </div>
+              </SectionCard>
             </div>
           ) : null}
 

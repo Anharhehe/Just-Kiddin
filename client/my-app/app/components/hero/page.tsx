@@ -270,24 +270,13 @@ function FeaturedProducts() {
 
   return (
     <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-bold tracking-wide text-[#E8735F] sm:text-base">
-            FEATURED PRODUCTS <HeartIcon className="h-3.5 w-3.5" />
-          </p>
-          <h2 className="mt-3 text-3xl font-extrabold leading-[1.15] text-[#293A55] sm:text-4xl lg:text-5xl">
-            Our hot sellers from the collection.
-          </h2>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowMore((value) => !value)}
-          className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full border border-[#e6ddcd] bg-white px-5 text-sm font-medium text-[#293A55] shadow-sm transition-colors hover:bg-[#fff7ef]"
-        >
-          {showMore ? "Show Less" : "Show More"}
-          <ChevronDown className={`h-4 w-4 transition-transform ${showMore ? "rotate-180" : ""}`} />
-        </button>
+      <div>
+        <p className="flex items-center gap-2 text-sm font-bold tracking-wide text-[#E8735F] sm:text-base">
+          FEATURED PRODUCTS <HeartIcon className="h-3.5 w-3.5" />
+        </p>
+        <h2 className="mt-3 text-3xl font-extrabold leading-[1.15] text-[#293A55] sm:text-4xl lg:text-5xl">
+          Our hot sellers from the collection.
+        </h2>
       </div>
 
       <div className="mt-8 flex items-center justify-between gap-3 border-b border-[#E6D9C4] pb-4">
@@ -310,7 +299,7 @@ function FeaturedProducts() {
               href={`/${ageSegment}/${genderSegment}/${categorySlug}/${product.id}`}
               className="group block cursor-pointer"
             >
-              <article className="overflow-hidden rounded-2xl border border-[#E6D9C4] bg-[#F3E9DC] shadow-[0_10px_28px_rgba(41,58,85,0.08)] transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_34px_rgba(41,58,85,0.14)]">
+              <article className="overflow-hidden rounded-2xl border border-[#E6D9C4] bg-[#FCF5EE] shadow-[0_10px_28px_rgba(41,58,85,0.08)] transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_34px_rgba(41,58,85,0.14)]">
                 <div className="relative aspect-square overflow-hidden">
                   <Image
                     src={imageSrc}
@@ -354,6 +343,18 @@ function FeaturedProducts() {
             </Link>
           );
         })}
+      </div>
+
+      <div className="mt-10 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setShowMore((value) => !value)}
+          className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-sm font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:text-base"
+          style={{ background: "#E8735F" }}
+        >
+          {showMore ? "Show Less" : "View Toddler Deals"}
+          <ChevronDown className={`h-4 w-4 transition-transform ${showMore ? "rotate-180" : ""}`} />
+        </button>
       </div>
     </div>
   );
@@ -414,7 +415,7 @@ function TopSellers() {
           className="flex cursor-pointer items-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:text-base"
           style={{ background: "#293A55" }}
         >
-          {showAll ? "Show Less" : "More"}
+          {showAll ? "Show Less" : "View Toddler Deals"}
           <ArrowIcon className={`h-4 w-4 transition-transform ${showAll ? "-rotate-90" : "rotate-90"}`} />
         </button>
       </div>

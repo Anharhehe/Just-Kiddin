@@ -1,8 +1,16 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import ProductDetailPage from "../../components/ProductDetailPage";
 import type { Product } from "../../data/demo";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000";
+async function getAppOrigin() {
+  const requestHeaders = await Promise.resolve(headers());
+  const forwardedHost = requestHeaders.get("x-forwarded-host");
+  const host = forwardedHost ?? requestHeaders.get("host");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? "http";
+
+  return host ? `${protocol}://${host}` : "http://localhost:3000";
+}
 
 function categorySlug(value: string) {
   return value
@@ -16,8 +24,9 @@ export const dynamic = "force-dynamic";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const appOrigin = await getAppOrigin();
 
-  const response = await fetch(`${API_BASE_URL}/api/products/${encodeURIComponent(id)}`, {
+  const response = await fetch(`${appOrigin}/api/products/${encodeURIComponent(id)}`, {
     cache: "no-store",
   });
 
@@ -40,8 +49,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
 
   try {
       const relatedUrl = product.gender
-        ? `${API_BASE_URL}/api/products?ageGroup=${encodeURIComponent(product.ageGroup)}&gender=${encodeURIComponent(product.gender)}&active=true`
-        : `${API_BASE_URL}/api/products?ageGroup=${encodeURIComponent(product.ageGroup)}&active=true`;
+        ? `${appOrigin}/api/products?ageGroup=${encodeURIComponent(product.ageGroup)}&gender=${encodeURIComponent(product.gender)}&active=true`
+        : `${appOrigin}/api/products?ageGroup=${encodeURIComponent(product.ageGroup)}&active=true`;
 
       const relatedResponse = await fetch(relatedUrl, { cache: "no-store" });
 

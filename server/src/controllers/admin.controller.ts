@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma";
 const orderStatuses = ["PENDING", "DISPATCHED", "DELIVERED", "CANCELLED"] as const;
 const revenueStatuses = ["DELIVERED"] as const;
 const contactQueryReadStatuses = ["IN_PROGRESS", "RESOLVED"] as const;
+const newArrivalsSettingKey = "newArrivalsCutoff";
 
 const reviewSchema = z.object({
   name: z.string().trim().min(2).max(120),
@@ -497,5 +498,51 @@ export async function deleteAdminContactQuery(req: { params: { queryId?: string 
   return res.status(200).json({
     success: true,
     message: "Query deleted successfully",
+  });
+}
+
+function readNewArrivalsCutoff(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const cutoffAt = (value as { cutoffAt?: unknown }).cutoffAt;
+
+  return typeof cutoffAt === "string" && cutoffAt.trim().length > 0 ? cutoffAt : null;
+}
+
+export async function getNewArrivalsSetting(_req: unknown, res: Response) {
+  const setting = await prisma.siteSetting.findUnique({
+    where: { key: newArrivalsSettingKey },
+  });
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      cutoffAt: readNewArrivalsCutoff(setting?.value) ?? null,
+    },
+  });
+}
+
+export async function updateNewArrivalsSetting(_req: unknown, res: Response) {
+  const cutoffAt = new Date().toISOString();
+
+  const setting = await prisma.siteSetting.upsert({
+    where: { key: newArrivalsSettingKey },
+    create: {
+      key: newArrivalsSettingKey,
+      value: { cutoffAt },
+    },
+    update: {
+      value: { cutoffAt },
+    },
+  });
+
+  return res.status(200).json({
+    success: true,
+    message: "New arrivals cutoff updated successfully",
+    data: {
+      cutoffAt: readNewArrivalsCutoff(setting.value) ?? cutoffAt,
+    },
   });
 }

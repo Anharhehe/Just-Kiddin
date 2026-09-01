@@ -22,12 +22,13 @@ const socialLinks = [
 
 // Brand palette
 const DEEP_NAVY   = "#0F2540";
-const SOFT_TEAL   = "#DCE6DE";
+const SOFT_TEAL   = "#7FA08D";
 const CORAL       = "#FF7D6B";
 const WARM_IVORY  = "#F8F5EF";
 const YELLOW = "#dbc548";
 const PURPLE = "#b36dcf";
-const GREEN = "#3a988a";
+const GREEN = "#7FA08D";
+const WHITE = "#1d1646";
 
 const socialHoverColors: Record<string, string> = {
   Instagram: CORAL,
@@ -46,7 +47,7 @@ export default function Footer() {
   const cardBg = WARM_IVORY;
   const borderColor = "#E3DCCB";
   const textColor = DEEP_NAVY;
-  const mutedText = "#2C4A63";
+  const mutedText = "#fcfcfd";
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +114,7 @@ export default function Footer() {
             className="text-2xl sm:text-3xl font-semibold"
             style={{ fontFamily: "'Quicksand', sans-serif" }}
             >
-            <span style={{ color: GREEN }}>J</span>
+            <span style={{ color: WHITE }}>J</span>
             <span style={{ color: CORAL }}>U</span>
             <span style={{ color: YELLOW }}>S</span>
             <span style={{ color: PURPLE }}>T</span>{" "}

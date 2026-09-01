@@ -18,9 +18,15 @@ const productPayloadSchema = z.object({
   gender: genderSchema.nullable().optional(),
   tags: z.array(z.string().trim().min(1)).default([]),
   price: z.number().int().nonnegative(),
-  description: z.string().trim().max(2000).optional().or(z.literal("")),
+  discountPercent: z.number().int().min(0).max(100).default(15),
+  description: z.string().max(2000).optional().or(z.literal("")),
   sizes: z.array(z.string().trim().min(1)).default([]),
   colors: z.array(z.string().trim().min(1)).default([]),
+  variantStock: z.array(z.object({
+    size: z.string().trim().min(1).nullable().optional(),
+    color: z.string().trim().min(1).nullable().optional(),
+    quantity: z.number().int().min(0),
+  })).default([]),
   sku: z.string().trim().min(1).max(120).optional().or(z.literal("")),
   stockQuantity: z.number().int().min(0).default(0),
   lowStockThreshold: z.number().int().min(0).default(5),
@@ -110,9 +116,11 @@ function normalizeProduct(product: {
   gender: string | null;
   tags: string[];
   price: number;
+  discountPercent: number;
   description: string | null;
   sizes: string[];
   colors: string[];
+  variantStock: unknown;
   sku: string | null;
   stockQuantity: number;
   lowStockThreshold: number;
@@ -152,6 +160,24 @@ function normalizeProduct(product: {
     createdAt: image.createdAt,
   }));
 
+  const variantStock = Array.isArray(product.variantStock)
+    ? product.variantStock
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") {
+            return null;
+          }
+
+          const typedEntry = entry as { size?: unknown; color?: unknown; quantity?: unknown };
+
+          return {
+            size: typeof typedEntry.size === "string" && typedEntry.size.trim().length > 0 ? typedEntry.size : null,
+            color: typeof typedEntry.color === "string" && typedEntry.color.trim().length > 0 ? typedEntry.color : null,
+            quantity: typeof typedEntry.quantity === "number" ? typedEntry.quantity : Number(typedEntry.quantity) || 0,
+          };
+        })
+        .filter((entry): entry is { size: string | null; color: string | null; quantity: number } => Boolean(entry))
+    : [];
+
   return {
     id: product.id,
     slug: product.slug,
@@ -161,9 +187,11 @@ function normalizeProduct(product: {
     gender: product.gender ? product.gender.toLowerCase() : null,
     tags: product.tags,
     price: product.price,
+    discountPercent: product.discountPercent,
     description: product.description,
     sizes: product.sizes,
     colors: product.colors,
+    variantStock,
     sku: product.sku,
     stockQuantity: product.stockQuantity,
     lowStockThreshold: product.lowStockThreshold,
@@ -282,6 +310,14 @@ export async function createProduct(req: { body: unknown }, res: Response) {
 
   const slug = await makeUniqueSlug(parsed.data.slug || parsed.data.name);
   const sku = parsed.data.sku?.trim() || null;
+  const variantStock = parsed.data.variantStock.map((entry) => ({
+    size: entry.size?.trim() || null,
+    color: entry.color?.trim() || null,
+    quantity: entry.quantity,
+  }));
+  const stockQuantity = variantStock.length > 0
+    ? variantStock.reduce((sum, entry) => sum + entry.quantity, 0)
+    : parsed.data.stockQuantity;
 
   const productData = parsed.data.ageGroup === "accessories"
     ? {
@@ -292,11 +328,13 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         gender: null,
         tags: parsed.data.tags,
         price: parsed.data.price,
-        description: parsed.data.description?.trim() || null,
+        discountPercent: parsed.data.discountPercent,
+        description: parsed.data.description ?? null,
         sizes: parsed.data.sizes,
         colors: parsed.data.colors,
+        variantStock,
         sku,
-        stockQuantity: parsed.data.stockQuantity,
+        stockQuantity,
         lowStockThreshold: parsed.data.lowStockThreshold,
         isActive: parsed.data.isActive,
         isFeatured: parsed.data.isFeatured,
@@ -309,11 +347,13 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL",
         tags: parsed.data.tags,
         price: parsed.data.price,
-        description: parsed.data.description?.trim() || null,
+        discountPercent: parsed.data.discountPercent,
+        description: parsed.data.description ?? null,
         sizes: parsed.data.sizes,
         colors: parsed.data.colors,
+        variantStock,
         sku,
-        stockQuantity: parsed.data.stockQuantity,
+        stockQuantity,
         lowStockThreshold: parsed.data.lowStockThreshold,
         isActive: parsed.data.isActive,
         isFeatured: parsed.data.isFeatured,
@@ -364,6 +404,14 @@ export async function updateProduct(req: { params: { productId?: string }; body:
 
   const nextSlug = parsed.data.slug ? await makeUniqueSlug(parsed.data.slug, productId) : undefined;
   const nextName = parsed.data.name ?? existing.name;
+  const variantStock = parsed.data.variantStock.map((entry) => ({
+    size: entry.size?.trim() || null,
+    color: entry.color?.trim() || null,
+    quantity: entry.quantity,
+  }));
+  const stockQuantity = variantStock.length > 0
+    ? variantStock.reduce((sum, entry) => sum + entry.quantity, 0)
+    : parsed.data.stockQuantity;
 
   const productData = parsed.data.ageGroup === "accessories"
     ? {
@@ -374,11 +422,12 @@ export async function updateProduct(req: { params: { productId?: string }; body:
         gender: null,
         ...(parsed.data.tags ? { tags: parsed.data.tags } : {}),
         ...(typeof parsed.data.price === "number" ? { price: parsed.data.price } : {}),
-        ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description?.trim() || null } : {}),
+        ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description ?? null } : {}),
         ...(parsed.data.sizes ? { sizes: parsed.data.sizes } : {}),
         ...(parsed.data.colors ? { colors: parsed.data.colors } : {}),
+        ...(parsed.data.variantStock ? { variantStock } : {}),
         ...(typeof parsed.data.sku !== "undefined" ? { sku: parsed.data.sku?.trim() || null } : {}),
-        ...(typeof parsed.data.stockQuantity === "number" ? { stockQuantity: parsed.data.stockQuantity } : {}),
+        ...(typeof parsed.data.stockQuantity === "number" || variantStock.length > 0 ? { stockQuantity } : {}),
         ...(typeof parsed.data.lowStockThreshold === "number" ? { lowStockThreshold: parsed.data.lowStockThreshold } : {}),
         ...(typeof parsed.data.isActive === "boolean" ? { isActive: parsed.data.isActive } : {}),
         ...(typeof parsed.data.isFeatured === "boolean" ? { isFeatured: parsed.data.isFeatured } : {}),
@@ -393,11 +442,14 @@ export async function updateProduct(req: { params: { productId?: string }; body:
         ...(typeof parsed.data.gender !== "undefined" ? { gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL" } : {}),
         ...(parsed.data.tags ? { tags: parsed.data.tags } : {}),
         ...(typeof parsed.data.price === "number" ? { price: parsed.data.price } : {}),
-        ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description?.trim() || null } : {}),
+        ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
+        ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
+        ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description ?? null } : {}),
         ...(parsed.data.sizes ? { sizes: parsed.data.sizes } : {}),
         ...(parsed.data.colors ? { colors: parsed.data.colors } : {}),
+        ...(parsed.data.variantStock ? { variantStock } : {}),
         ...(typeof parsed.data.sku !== "undefined" ? { sku: parsed.data.sku?.trim() || null } : {}),
-        ...(typeof parsed.data.stockQuantity === "number" ? { stockQuantity: parsed.data.stockQuantity } : {}),
+        ...(typeof parsed.data.stockQuantity === "number" || variantStock.length > 0 ? { stockQuantity } : {}),
         ...(typeof parsed.data.lowStockThreshold === "number" ? { lowStockThreshold: parsed.data.lowStockThreshold } : {}),
         ...(typeof parsed.data.isActive === "boolean" ? { isActive: parsed.data.isActive } : {}),
         ...(typeof parsed.data.isFeatured === "boolean" ? { isFeatured: parsed.data.isFeatured } : {}),
