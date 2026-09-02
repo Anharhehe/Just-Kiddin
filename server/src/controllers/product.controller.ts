@@ -119,6 +119,7 @@ function normalizeProduct(product: {
   price: number;
   discountPercent: number;
   description: string | null;
+  tableDescription?: string[] | null;
   sizes: string[];
   colors: string[];
   variantStock: unknown;
