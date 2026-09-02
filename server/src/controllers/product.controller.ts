@@ -8,7 +8,7 @@ import { supabaseAdmin } from "../lib/supabase";
 const PRODUCT_IMAGE_BUCKET = "product-images";
 
 const ageGroupSchema = z.enum(["newborn", "toddler", "accessories"]);
-const genderSchema = z.enum(["boy", "girl"]);
+const genderSchema = z.enum(["boy", "girl", "unisex"]);
 
 const productPayloadSchema = z.object({
   name: z.string().trim().min(2).max(180),
@@ -20,6 +20,7 @@ const productPayloadSchema = z.object({
   price: z.number().int().nonnegative(),
   discountPercent: z.number().int().min(0).max(100).default(15),
   description: z.string().max(2000).optional().or(z.literal("")),
+  tableDescription: z.array(z.string()).max(5).default(["", "", "", "", ""]),
   sizes: z.array(z.string().trim().min(1)).default([]),
   colors: z.array(z.string().trim().min(1)).default([]),
   variantStock: z.array(z.object({
@@ -200,6 +201,7 @@ function normalizeProduct(product: {
     isFeatured: product.isFeatured,
     image: imageList.length <= 1 ? imageList[0]?.url ?? "/demo.png" : imageList.map((image) => image.url),
     images: imageList,
+    tableDescription: product.tableDescription ?? [],
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -250,7 +252,11 @@ export async function getProducts(req: { query: { ageGroup?: string; gender?: st
   const products = await prisma.product.findMany({
     where: {
       ...(ageGroup === "NEWBORN" || ageGroup === "TODDLER" ? { ageGroup: ageGroup as "NEWBORN" | "TODDLER" } : {}),
-        ...(gender === "BOY" || gender === "GIRL" ? { gender: gender as "BOY" | "GIRL" } : {}),
+        ...(gender === "BOY" || gender === "GIRL"
+          ? { gender: { in: [gender as "BOY" | "GIRL", "UNISEX"] } }
+          : gender === "UNISEX"
+          ? { gender: "UNISEX" }
+          : {}),
       ...(category ? { category } : {}),
       ...(featured === "true" ? { isFeatured: true } : {}),
       ...(active === "false" ? {} : { isActive: true }),
@@ -330,6 +336,7 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         price: parsed.data.price,
         discountPercent: parsed.data.discountPercent,
         description: parsed.data.description ?? null,
+        tableDescription: parsed.data.tableDescription ?? [],
         sizes: parsed.data.sizes,
         colors: parsed.data.colors,
         variantStock,
@@ -344,11 +351,12 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         name: parsed.data.name,
         category: parsed.data.category?.trim() || null,
         ageGroup: parsed.data.ageGroup.toUpperCase() as "NEWBORN" | "TODDLER",
-        gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL",
+        gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL" | "UNISEX",
         tags: parsed.data.tags,
         price: parsed.data.price,
         discountPercent: parsed.data.discountPercent,
-        description: parsed.data.description ?? null,
+      description: parsed.data.description ?? null,
+      tableDescription: parsed.data.tableDescription ?? [],
         sizes: parsed.data.sizes,
         colors: parsed.data.colors,
         variantStock,
@@ -423,6 +431,7 @@ export async function updateProduct(req: { params: { productId?: string }; body:
         ...(parsed.data.tags ? { tags: parsed.data.tags } : {}),
         ...(typeof parsed.data.price === "number" ? { price: parsed.data.price } : {}),
         ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description ?? null } : {}),
+        ...(typeof parsed.data.tableDescription !== "undefined" ? { tableDescription: parsed.data.tableDescription } : {}),
         ...(parsed.data.sizes ? { sizes: parsed.data.sizes } : {}),
         ...(parsed.data.colors ? { colors: parsed.data.colors } : {}),
         ...(parsed.data.variantStock ? { variantStock } : {}),
@@ -439,12 +448,13 @@ export async function updateProduct(req: { params: { productId?: string }; body:
           ? { ageGroup: parsed.data.ageGroup.toUpperCase() as "NEWBORN" | "TODDLER" }
           : {}),
         ...(typeof parsed.data.category !== "undefined" ? { category: parsed.data.category?.trim() || null } : {}),
-        ...(typeof parsed.data.gender !== "undefined" ? { gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL" } : {}),
+        ...(typeof parsed.data.gender !== "undefined" ? { gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL" | "UNISEX" } : {}),
         ...(parsed.data.tags ? { tags: parsed.data.tags } : {}),
         ...(typeof parsed.data.price === "number" ? { price: parsed.data.price } : {}),
         ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
         ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
         ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description ?? null } : {}),
+        ...(typeof parsed.data.tableDescription !== "undefined" ? { tableDescription: parsed.data.tableDescription } : {}),
         ...(parsed.data.sizes ? { sizes: parsed.data.sizes } : {}),
         ...(parsed.data.colors ? { colors: parsed.data.colors } : {}),
         ...(parsed.data.variantStock ? { variantStock } : {}),

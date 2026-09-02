@@ -75,6 +75,14 @@ function getVariantQuantity(
   return match?.quantity ?? null;
 }
 
+function gendersMatch(a: string | null | undefined, b: string | null | undefined) {
+  const A = (a ?? "").toLowerCase();
+  const B = (b ?? "").toLowerCase();
+  if (!A || !B) return A === B;
+  if (A === "unisex" || B === "unisex") return true;
+  return A === B;
+}
+
 type ProductReview = {
   id: string;
   productId?: string | null;
@@ -166,10 +174,7 @@ export default function ProductDetailPage({
   const { addItem } = useCart();
   const favourited = favouriteIds.has(product.id);
 
-  // zoom-on-hover state for the main image
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [zoomOrigin, setZoomOrigin] = useState({ x: 50, y: 50 });
-  const imageWrapRef = useRef<HTMLDivElement>(null);
+  // image state
   const reviewsSectionRef = useRef<HTMLDivElement>(null);
 
   const averageRating = useMemo(() => {
@@ -280,13 +285,6 @@ export default function ProductDetailPage({
     };
   }, [showSizeChart]);
 
-  const handleImageMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = imageWrapRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setZoomOrigin({ x: Math.min(100, Math.max(0, x)), y: Math.min(100, Math.max(0, y)) });
-  };
 
   const discountPercent = Math.min(100, Math.max(0, product.discountPercent ?? 15));
   const compareAtPrice = useMemo(() => {
@@ -311,7 +309,7 @@ export default function ProductDetailPage({
             return p.ageGroup === "accessories" && p.category === product.category;
           }
 
-          return p.ageGroup === product.ageGroup && p.gender === product.gender && p.category === product.category;
+          return p.ageGroup === product.ageGroup && gendersMatch(p.gender, product.gender) && p.category === product.category;
         })
         .slice(0, 4),
     [product, relatedSource]
@@ -598,27 +596,23 @@ export default function ProductDetailPage({
       </div>
 
       <div className="px-6 pb-12 sm:px-[1in]">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-stretch">
+        {/* FIX #2: lg:items-start instead of lg:items-stretch so the image column
+            no longer stretches/distorts to match the height of the details column
+            when the description or table gets long. */}
+        <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
 
           {/* Image gallery — main image on top (smaller, zoom-on-hover), thumbnails below, arrows on all breakpoints */}
-          <div className="flex w-full max-w-md lg:max-w-[461px] flex-col gap-3 lg:shrink-0">
+          {/* FIX #2: added lg:sticky lg:top-6 so it holds its own place instead of
+              growing with the rest of the page, and dropped the lg:aspect-auto /
+              lg:min-h-[535px] override that let its height get overridden. */}
+          <div className="flex w-full max-w-md lg:max-w-[461px] flex-col gap-3 lg:sticky lg:top-6 lg:shrink-0 lg:self-start">
             {/* Main image */}
-            <div
-              ref={imageWrapRef}
-              onMouseEnter={() => setIsZoomed(true)}
-              onMouseLeave={() => setIsZoomed(false)}
-              onMouseMove={handleImageMouseMove}
-              className="relative aspect-square w-full flex-1 overflow-hidden rounded-2xl bg-[#EFE9DF] shadow-[0_12px_32px_rgba(41,58,85,0.10)] cursor-zoom-in lg:aspect-auto lg:min-h-[535px]"
-            >
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-[#EFE9DF] shadow-[0_12px_32px_rgba(41,58,85,0.10)]">
               <Image
                 src={galleryImages[activeImage]}
                 alt={product.name}
                 fill
-                className="object-cover transition-transform duration-150 ease-out"
-                style={{
-                  transform: isZoomed ? "scale(2.2)" : "scale(1)",
-                  transformOrigin: `${zoomOrigin.x}% ${zoomOrigin.y}%`,
-                }}
+                className="object-cover"
                 sizes="(max-width: 1024px) 90vw, 24rem"
                 priority
               />
@@ -690,10 +684,10 @@ export default function ProductDetailPage({
                 <span className="text-base font-medium text-[#9a8f7f] line-through">
                   Rs {compareAtPrice.toLocaleString()}
                 </span>
-                <span className="ml-10 text-xl font-bold text-[#E8735F]" style={{ fontFamily: FONT_HEADING }}>
+                <span className="ml-10 text-3xl font-bold text-[#E8735F]" style={{ fontFamily: FONT_HEADING }}>
                   Rs {product.price.toLocaleString()}
                 </span>
-                <span className="ml-10 rounded-full bg-[#7FA08D]/15 px-2 py-0.5 text-xs font-bold text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
+                <span className="ml-10 rounded-full bg-[#7FA08D]/15 px-2 py-0.5 text-xl font-bold text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
                   Save {discountPercent}%
                 </span>
               </div>
@@ -716,12 +710,37 @@ export default function ProductDetailPage({
 
             <hr className="border-[#C86909]/60" />
 
-            {/* Description */}
-            {product.description && (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#6B7280]">
-                {product.description}
-              </p>
-            )}
+            {/* FIX #1 + #4: table description made compact (smaller padding/gaps,
+                shorter heading, no "verified by" filler line) and icons removed. */}
+            {(() => {
+              const tableArr = ((product as any).tableDescription as string[]) ?? [];
+              const hasAny = tableArr.some((a) => (a ?? "").toString().trim().length > 0);
+              if (!hasAny) return null;
+
+              return (
+                <section className="rounded-xl border border-[#ead9c1] bg-[#FCF5EE] p-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#7FA08D]">Key specifications</p>
+
+                  <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                    {(() => {
+                      const HEADINGS = ["Product type", "Style", "Season", "Packaging", "Fabric"];
+
+                      return tableArr.map((answer, idx) => {
+                        if (!answer || !answer.toString().trim()) return null;
+                        const heading = HEADINGS[idx] ?? `Heading ${idx + 1}`;
+
+                        return (
+                          <div key={idx} className="flex items-baseline gap-1.5 text-sm">
+                            <span className="shrink-0 font-semibold text-[#2F2A22]">{heading}:</span>
+                            <span className="truncate text-[#5c5445]">{answer}</span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Colour — only rendered/selectable if the product actually has colors */}
             {availableColors.length > 0 && (
@@ -913,6 +932,14 @@ export default function ProductDetailPage({
             </div>
           </div>
         </div>
+
+        {/* FIX #3: paragraph description moved here — bottom of the product
+            details block, above the reviews section. */}
+        {product.description && (
+          <div className="mt-10 rounded-2xl border border-black/15 bg-white p-4">
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#374151]">{product.description}</p>
+          </div>
+        )}
 
         <div ref={reviewsSectionRef} className="mt-16 rounded-[2rem] border border-[#E8DDCC] bg-white px-5 py-6 shadow-[0_12px_32px_rgba(41,58,85,0.06)] sm:px-7">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">

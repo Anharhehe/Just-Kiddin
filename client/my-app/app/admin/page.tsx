@@ -252,11 +252,12 @@ type ProductFormState = {
   name: string;
   category: string | null;
   ageGroup: "newborn" | "toddler" | "accessories";
-  gender: "boy" | "girl" | null;
+  gender: "boy" | "girl" | "unisex" | null;
   tags: string;
   price: string;
   discountPercent: string;
   description: string;
+  tableDescription: string[];
   sizes: string[];
   colors: string[];
   variantStock: VariantStockEntry[];
@@ -275,6 +276,7 @@ const emptyForm: ProductFormState = {
   price: "",
   discountPercent: "15",
   description: "",
+  tableDescription: ["", "", "", "", ""],
   sizes: [],
   colors: [],
   variantStock: [],
@@ -739,6 +741,11 @@ export default function AdminPage() {
     if (!selectedProduct) {
       return;
     }
+    const rawTable = (selectedProduct as any).tableDescription;
+    const normalizedTable = Array.isArray(rawTable)
+      ? // ensure exactly 5 entries
+        Array.from({ length: 5 }, (_, i) => String(rawTable[i] ?? ""))
+      : ["", "", "", "", ""];
 
     setForm({
       name: selectedProduct.name,
@@ -749,6 +756,7 @@ export default function AdminPage() {
       price: String(selectedProduct.price),
       discountPercent: String(selectedProduct.discountPercent ?? 15),
       description: selectedProduct.description ?? "",
+      tableDescription: normalizedTable,
       sizes: sanitizeSizesForAgeGroup(selectedProduct.ageGroup, selectedProduct.sizes),
       colors: normalizeColors(selectedProduct.colors),
       variantStock: buildInitialVariantStock(selectedProduct),
@@ -824,15 +832,16 @@ export default function AdminPage() {
       return;
     }
 
+    // Only allow a single selected color — replace any existing selection
     setForm((current) => {
-      if (current.colors.includes(normalized)) {
+      if (current.colors.length === 1 && current.colors[0] === normalized) {
         return current;
       }
 
       return {
         ...current,
-        colors: [...current.colors, normalized],
-        variantStock: reconcileVariantStock(current.variantStock, current.sizes, [...current.colors, normalized]),
+        colors: [normalized],
+        variantStock: reconcileVariantStock(current.variantStock, current.sizes, [normalized]),
       };
     });
 
@@ -851,11 +860,13 @@ export default function AdminPage() {
     }));
 
     setColorImageDrafts((current) => {
-      const removed = current.find((draft) => draft.color === color);
+      const toRemove = current.filter((draft) => draft.color === color);
 
-      if (removed) {
-        URL.revokeObjectURL(removed.previewUrl);
-      }
+      toRemove.forEach((draft) => {
+        try {
+          URL.revokeObjectURL(draft.previewUrl);
+        } catch {}
+      });
 
       return current.filter((draft) => draft.color !== color);
     });
@@ -867,21 +878,16 @@ export default function AdminPage() {
   }
 
   function setDraftImageForColor(color: string, file: File) {
+    // Allow multiple images per color by appending a new draft entry
     setColorImageDrafts((current) => {
-      const existing = current.find((draft) => draft.color === color);
-
-      if (existing) {
-        URL.revokeObjectURL(existing.previewUrl);
-      }
-
       const nextDraft = {
-        id: existing?.id ?? window.crypto.randomUUID(),
+        id: window.crypto.randomUUID(),
         color,
         file,
         previewUrl: URL.createObjectURL(file),
       };
 
-      return [...current.filter((draft) => draft.color !== color), nextDraft];
+      return [...current, nextDraft];
     });
   }
 
@@ -903,7 +909,8 @@ export default function AdminPage() {
       return;
     }
 
-    setDraftImageForColor(pendingColorUpload, files[0]);
+    // Append every selected file as a separate draft for the pending color
+    files.forEach((file) => setDraftImageForColor(pendingColorUpload, file));
     setPendingColorUpload(null);
 
     if (colorImageInputRef.current) {
@@ -947,8 +954,8 @@ export default function AdminPage() {
     setSavingProduct(true);
     setNotice(null);
 
-    if (form.ageGroup !== "accessories" && form.colors.length > 0 && selectedProductId === null && colorImageDrafts.length !== form.colors.length) {
-      setNotice("Select one image for each selected color before saving the product.");
+    if (form.ageGroup !== "accessories" && form.colors.length > 0 && selectedProductId === null && colorImageDrafts.length === 0) {
+      setNotice("Upload at least one image for the selected color before saving the product.");
       setSavingProduct(false);
       return;
     }
@@ -965,6 +972,7 @@ export default function AdminPage() {
       price: Number(form.price),
       discountPercent: Number(form.discountPercent),
       description: form.description,
+      tableDescription: form.tableDescription,
       sizes: form.sizes,
       colors: form.colors,
       variantStock: nextVariantStock,
@@ -1658,7 +1666,7 @@ export default function AdminPage() {
                   <Field label="Gender">
                     <select
                       value={form.gender ?? ""}
-                      onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value as "boy" | "girl" }))}
+                      onChange={(event) => setForm((current) => ({ ...current, gender: event.target.value as "boy" | "girl" | "unisex" }))}
                       disabled={form.ageGroup === "accessories"}
                       className={INPUT_CLASS}
                     >
@@ -1667,6 +1675,7 @@ export default function AdminPage() {
                       </option>
                       <option value="boy">Boy</option>
                       <option value="girl">Girl</option>
+                      <option value="unisex">Unisex</option>
                     </select>
                   </Field>
                   <Field label="Category">
@@ -1765,7 +1774,7 @@ export default function AdminPage() {
                       <div className="space-y-3">
                         {form.colors.length > 0 ? (
                           form.colors.map((color) => {
-                            const draftImage = colorImageDrafts.find((draft) => draft.color === color) ?? null;
+                            const draftsForColor = colorImageDrafts.filter((draft) => draft.color === color);
 
                             return (
                               <div key={color} className="rounded-3xl border border-black/10 bg-white p-3">
@@ -1773,14 +1782,14 @@ export default function AdminPage() {
                                   <span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: color }} />
                                   <div className="min-w-0 flex-1">
                                     <p className="truncate text-sm font-semibold text-[var(--foreground)]">{formatColorLabel(color)}</p>
-                                    <p className="text-xs text-[var(--muted)]">Upload one image for this color</p>
+                                    <p className="text-xs text-[var(--muted)]">Upload images for this color</p>
                                   </div>
                                   <button
                                     type="button"
                                     onClick={() => openColorImagePicker(color)}
                                     className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-4 text-sm font-semibold text-white transition hover:opacity-90"
                                   >
-                                    {draftImage ? "Change image" : "Upload image"}
+                                    {draftsForColor.length > 0 ? "Upload more" : "Upload images"}
                                   </button>
                                   <button
                                     type="button"
@@ -1792,18 +1801,22 @@ export default function AdminPage() {
                                 </div>
 
                                 <div className="mt-3">
-                                  {draftImage ? (
-                                    <article className="overflow-hidden rounded-2xl border border-black/5 bg-[#fffaf2] shadow-sm">
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={draftImage.previewUrl} alt={`${color} preview`} className="h-36 w-full object-cover" />
-                                      <div className="p-3">
-                                        <p className="truncate text-sm font-semibold text-[var(--foreground)]">{draftImage.file.name}</p>
-                                        <p className="mt-1 text-xs text-[var(--muted)]">Linked to {formatColorLabel(color)}</p>
-                                      </div>
-                                    </article>
+                                  {draftsForColor.length > 0 ? (
+                                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                                      {draftsForColor.map((draftImage) => (
+                                        <article key={draftImage.id} className="overflow-hidden rounded-2xl border border-black/5 bg-[#fffaf2] shadow-sm">
+                                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                                          <img src={draftImage.previewUrl} alt={`${color} preview`} className="h-36 w-full object-cover" />
+                                          <div className="p-3">
+                                            <p className="truncate text-sm font-semibold text-[var(--foreground)]">{draftImage.file.name}</p>
+                                            <p className="mt-1 text-xs text-[var(--muted)]">Linked to {formatColorLabel(color)}</p>
+                                          </div>
+                                        </article>
+                                      ))}
+                                    </div>
                                   ) : (
                                     <div className="rounded-2xl border border-dashed border-black/10 bg-[#fffaf2] p-4 text-sm text-[var(--muted)]">
-                                      No image uploaded yet for this color.
+                                      No images uploaded yet for this color.
                                     </div>
                                   )}
                                 </div>
@@ -1966,6 +1979,30 @@ export default function AdminPage() {
                   <Field label="Low stock threshold"><input type="number" value={form.lowStockThreshold} onChange={(event) => setForm((current) => ({ ...current, lowStockThreshold: event.target.value }))} className={INPUT_CLASS} /></Field>
                   <Field label="Tags" className="md:col-span-2"><input value={form.tags} onChange={(event) => setForm((current) => ({ ...current, tags: event.target.value }))} placeholder="winter, essentials" className={INPUT_CLASS} /></Field>
                   <Field label="Description" className="md:col-span-2"><textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} rows={4} className={`${INPUT_CLASS} min-h-[110px] py-3`} /></Field>
+                  <Field label="Table description" className="md:col-span-2">
+                    <div className="space-y-3 rounded-3xl border border-black/5 bg-[#fffaf2] p-4">
+                      {(["Product type","Style","Season","Packaging","Fabric"] as const).map((label, index) => (
+                        <div key={index} className="grid gap-2 sm:grid-cols-[6rem_1fr] items-start">
+                          <div className="text-xs font-semibold text-[var(--foreground)]">{label}</div>
+                          <input
+                            value={form.tableDescription[index] ?? ""}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setForm((current) => {
+                                const base = Array.isArray(current.tableDescription) ? current.tableDescription.slice() : ["", "", "", "", ""];
+                                while (base.length < 5) base.push("");
+                                base[index] = value;
+                                return { ...current, tableDescription: base };
+                              });
+                            }}
+                            placeholder={`Answer for ${label}`}
+                            className="h-11 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm text-[var(--foreground)] outline-none"
+                          />
+                        </div>
+                      ))}
+                      <p className="text-xs text-[var(--muted)]">Enter answers for the five table headings shown on the product page.</p>
+                    </div>
+                  </Field>
                   <Field label="Product Images" className="md:col-span-2">
                     <div className="grid gap-4 rounded-3xl border border-black/5 bg-[#fffaf2] p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1975,7 +2012,15 @@ export default function AdminPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => colorImageInputRef.current?.click()}
+                          onClick={() => {
+                            if (form.colors.length === 0) {
+                              setNotice("Select a color first before uploading images.");
+                              return;
+                            }
+
+                            setPendingColorUpload(form.colors[0]);
+                            colorImageInputRef.current?.click();
+                          }}
                           className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-4 text-sm font-semibold text-white transition hover:opacity-90"
                         >
                           <ImagePlus className="h-4 w-4" />
@@ -1986,6 +2031,7 @@ export default function AdminPage() {
                       <input
                         ref={colorImageInputRef}
                         type="file"
+                                            multiple
                         accept="image/*"
                         className="hidden"
                         onChange={(event) => {
@@ -2027,12 +2073,12 @@ export default function AdminPage() {
                         </div>
                       ) : (
                         <div className="rounded-2xl border border-dashed border-black/10 bg-white p-6 text-sm text-[var(--muted)]">
-                          No color-linked images selected yet. Choose a color and upload its image.
+                          No images selected yet. Choose a color and upload images.
                         </div>
                       )}
 
                       <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted)]">
-                        <p>{colorImageDrafts.length} color-linked image{colorImageDrafts.length === 1 ? "" : "s"} ready to save.</p>
+                        <p>{colorImageDrafts.length} image{colorImageDrafts.length === 1 ? "" : "s"} ready to save.</p>
                         {colorImageDrafts.length > 0 ? (
                           <button type="button" onClick={clearColorDraftImages} className="font-semibold text-[#8b5a2b] hover:underline">
                             Clear all

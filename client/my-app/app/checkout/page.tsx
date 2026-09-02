@@ -240,7 +240,7 @@ export default function CheckoutPage() {
 					subtotal: formatCurrency(subtotal),
 					discount: formatCurrency(discountAmount),
 					deliveryCharge: deliveryCharge === 0 ? "Free" : formatCurrency(deliveryCharge),
-					total: formatCurrency(totalAmount),
+					"payable amount": formatCurrency(totalAmount),
 				}),
 			}).catch((error) => {
 				console.error("Formspree notification failed:", error);

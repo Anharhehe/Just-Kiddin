@@ -22,7 +22,7 @@ export default function Hero({ onSelectNewborns, onSelectToddlers }: HeroProps) 
       <div className="relative flex min-h-[65vh] w-full flex-col justify-center sm:min-h-[92vh]">
         {/* Mobile background */}
         <Image
-          src="/hero.jpg"
+          src="/hero2.png"
           alt="Hero background"
           fill
           priority

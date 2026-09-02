@@ -69,7 +69,7 @@ export default function NewbornsPage() {
 
       try {
         const response = await fetch(
-          `/api/products?ageGroup=newborn&gender=${genderKey}`,
+          `/api/products?ageGroup=newborn&active=true`,
           { signal: controller.signal }
         );
 
@@ -102,13 +102,13 @@ export default function NewbornsPage() {
   const visibleProducts = useMemo(() => {
     const activeCategoryLabel = CATEGORIES.find((category) => category.slug === activeCategory)?.label ?? "";
 
-    let filtered = products.filter(
-      (p) =>
-        p.ageGroup === "newborn" &&
-        p.gender === genderKey &&
-        (p.category ? categorySlug(p.category) === activeCategory : false) &&
-        (activeCategoryLabel ? (p.category ?? "").trim().toLowerCase() === activeCategoryLabel.trim().toLowerCase() : true)
-    );
+    let filtered = products.filter((p) => {
+      const matchesAge = p.ageGroup === "newborn";
+      const matchesGender = p.gender === genderKey || p.gender === "unisex";
+      const matchesCategory = p.category ? categorySlug(p.category) === activeCategory : false;
+      const matchesLabel = activeCategoryLabel ? (p.category ?? "").trim().toLowerCase() === activeCategoryLabel.trim().toLowerCase() : true;
+      return matchesAge && matchesGender && matchesCategory && matchesLabel;
+    });
 
     if (sortBy === "Price: Low to High") return [...filtered].sort((a, b) => a.price - b.price);
     if (sortBy === "Price: High to Low") return [...filtered].sort((a, b) => b.price - a.price);
@@ -299,6 +299,13 @@ export default function NewbornsPage() {
                             className="object-cover transition-transform duration-300 group-hover:scale-105"
                             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                           />
+
+                          {product.discountPercent ? (
+                            <div className="absolute left-3 top-3 rounded-full bg-[#E8735F] px-3 py-1 text-xs font-bold text-white">
+                              {product.discountPercent}% OFF
+                            </div>
+                          ) : null}
+
                           <button
                             type="button"
                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); void toggleFav(product); }}
@@ -320,12 +327,15 @@ export default function NewbornsPage() {
                           )}
                         </div>
 
-                        <p className="mt-3 text-base font-bold text-[#293A55] items-center text-center truncate" title={product.name}>
-                          {product.name}
-                        </p>
-                        <p className="text-sm font-medium text-[#5c5445] items-center text-center">
-                          PKR {product.price.toLocaleString()}
-                        </p>
+                        <div className="mt-3 text-left">
+                          <p className="text-base font-bold text-[#293A55] truncate" title={product.name}>{product.name}</p>
+                          <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
+                          <p className="text-sm text-[#9a8f7f] line-through">PKR {Math.round((product.price) / (1 - ((product as any).discountPercent || 0)/100)).toLocaleString()}</p>
+                          <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
+                            <span className="flex items-center gap-1"><span className="text-yellow-500">★</span><span className="font-semibold">{(() => { const rs = (product as any).reviews ?? []; if (!Array.isArray(rs) || rs.length===0) return '0.0'; const s = rs.reduce((a:any,b:any)=>a+(b?.rating||0),0); return (s/rs.length).toFixed(1); })()}</span></span>
+                            <span className="text-[#7A6F5D]">({((product as any).reviews ?? []).length || 0})</span>
+                          </div>
+                        </div>
                       </Link>
                     );
                   })}

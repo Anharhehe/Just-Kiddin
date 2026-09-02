@@ -33,6 +33,7 @@ enum ProductAgeGroup {
 enum ProductGender {
   BOY
   GIRL
+  UNISEX
 }
 
 enum ProductImageType {
@@ -130,6 +131,7 @@ model Product {
   price            Int
   discountPercent  Int             @default(15)
   description      String?
+  tableDescription String[]        @default([])
   sizes            String[]
   colors           String[]
   variantStock     Json?

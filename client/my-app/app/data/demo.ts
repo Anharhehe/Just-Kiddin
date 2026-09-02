@@ -24,7 +24,7 @@ export interface Product {
   name: string;
   category: string | null;
   ageGroup: "newborn" | "toddler" | "accessories";
-  gender: "boy" | "girl" | null;
+  gender: "boy" | "girl" | "unisex" | null;
   tags: string[];
   price: number;
   discountPercent?: number;

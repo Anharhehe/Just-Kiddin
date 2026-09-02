@@ -18,7 +18,7 @@ const orderItemSchema = z.object({
   color: z.string().min(1),
   category: z.string().min(1),
   ageGroup: z.enum(["newborn", "toddler", "accessories"]),
-  gender: z.enum(["boy", "girl"]).nullable(),
+  gender: z.enum(["boy", "girl", "unisex"]).nullable(),
   inStock: z.boolean(),
 });
 

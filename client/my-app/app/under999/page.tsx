@@ -40,6 +40,19 @@ function getProductDate(product: Product) {
   return toSortTimestamp((product as Product & { createdAt?: string | Date }).createdAt);
 }
 
+function compareAtPrice(price: number, discountPercent?: number) {
+  const dp = Math.max(0, Math.min(100, Number(discountPercent || 0)));
+  if (dp <= 0) return price;
+  return Math.round(price / (1 - dp / 100));
+}
+
+function averageRating(product: any) {
+  const reviews: any[] = (product as any).reviews ?? [];
+  if (!Array.isArray(reviews) || reviews.length === 0) return { avg: 0, count: 0 };
+  const sum = reviews.reduce((s, r) => s + (r?.rating || 0), 0);
+  return { avg: sum / reviews.length, count: reviews.length };
+}
+
 export default function Under999Page() {
   const [ageGroup, setAgeGroup] = useState<AgeGroup>("newborn");
   const [gender, setGender] = useState<Gender>("boys");
@@ -60,7 +73,7 @@ export default function Under999Page() {
 
       try {
         const response = await fetch(
-          `/api/products?ageGroup=${ageGroup}&gender=${genderKey}&active=true`,
+          `/api/products?ageGroup=${ageGroup}&active=true`,
           { signal: controller.signal }
         );
 
@@ -70,7 +83,7 @@ export default function Under999Page() {
 
         const payload = (await response.json()) as { data?: { products?: Product[] } };
         if (!controller.signal.aborted) {
-          setProducts((payload.data?.products ?? []).filter((product) => product.price < 1000));
+          setProducts(payload.data?.products ?? []);
         }
       } catch (fetchError) {
         if (!controller.signal.aborted) {
@@ -89,22 +102,20 @@ export default function Under999Page() {
   }, [ageGroup, genderKey]);
 
   const visibleProducts = useMemo(() => {
-    const sorted = [...products];
+    const filtered = products.filter((product) => {
+      // ageGroup and gender selection applied client-side; include unisex in both boy/girl views
+      const matchesAge = product.ageGroup === ageGroup;
+      const genderKeyLocal = gender === "boys" ? "boy" : "girl";
+      const matchesGender = product.gender === genderKeyLocal || product.gender === "unisex";
+      const underLimit = product.price < 1000;
+      return matchesAge && matchesGender && underLimit;
+    });
 
-    if (sortBy === "Price: Low to High") {
-      return sorted.sort((left, right) => left.price - right.price);
-    }
-
-    if (sortBy === "Price: High to Low") {
-      return sorted.sort((left, right) => right.price - left.price);
-    }
-
-    if (sortBy === "Oldest") {
-      return sorted.sort((left, right) => getProductDate(left) - getProductDate(right));
-    }
-
-    return sorted.sort((left, right) => getProductDate(right) - getProductDate(left));
-  }, [products, sortBy]);
+    if (sortBy === "Price: Low to High") return filtered.sort((l, r) => l.price - r.price);
+    if (sortBy === "Price: High to Low") return filtered.sort((l, r) => r.price - l.price);
+    if (sortBy === "Oldest") return filtered.sort((l, r) => getProductDate(l) - getProductDate(r));
+    return filtered.sort((l, r) => getProductDate(r) - getProductDate(l));
+  }, [products, sortBy, ageGroup, gender]);
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: FONT_HEADING }}>
@@ -171,38 +182,53 @@ export default function Under999Page() {
                   className="group flex cursor-pointer flex-col items-center"
                 >
                   <div className="relative aspect-square w-11/12 overflow-hidden rounded-xl border border-[#eee1cd] bg-[#F3E9DC] shadow-[0_4px_12px_rgba(41,58,85,0.06)] transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_10px_22px_rgba(41,58,85,0.14)]">
-                    <Image
-                      src={getProductImage(product)}
-                      alt={product.name}
-                      fill
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                      sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 16vw"
-                    />
+                      <Image
+                        src={getProductImage(product)}
+                        alt={product.name}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 16vw"
+                      />
 
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void toggleFav(product);
-                      }}
-                      className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-105"
-                      aria-label="Add to wishlist"
-                    >
-                      <Heart className={`h-3.5 w-3.5 ${liked ? "fill-red-500 text-red-500" : "text-[#293A55]"}`} />
-                    </button>
+                      {/* discount badge */}
+                      {product.discountPercent ? (
+                        <div className="absolute left-2 top-2 rounded-full bg-[#E8735F] px-3 py-1 text-xs font-bold text-white">
+                          {product.discountPercent}% OFF
+                        </div>
+                      ) : null}
 
-                    {!product.inStock && (
-                      <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                        Out of stock
-                      </span>
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void toggleFav(product);
+                        }}
+                        className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-105"
+                        aria-label="Add to wishlist"
+                      >
+                        <Heart className={`h-3.5 w-3.5 ${liked ? "fill-red-500 text-red-500" : "text-[#293A55]"}`} />
+                      </button>
 
-                  <div className="mt-3 flex w-4/5 flex-col items-center text-center">
-                    <p className="truncate text-lg font-bold text-[#293A55]">{product.name}</p>
-                    <p className="text-sm font-medium text-[#5c5445]">PKR {product.price.toLocaleString()}</p>
-                  </div>
+                      {!product.inStock && (
+                        <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                          Out of stock
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex w-11/12 flex-col items-start text-left">
+                      <p className="truncate text-lg font-bold text-[#293A55]">{product.name}</p>
+                      <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
+                      <p className="text-sm text-[#9a8f7f] line-through">PKR {compareAtPrice(product.price, (product as any).discountPercent).toLocaleString()}</p>
+                      <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
+                        <span className="flex items-center gap-1">
+                          <span className="text-yellow-500">★</span>
+                          <span className="font-semibold">{Number(averageRating(product).avg).toFixed(1)}</span>
+                        </span>
+                        <span className="text-[#7A6F5D]">({averageRating(product).count})</span>
+                      </div>
+                    </div>
                 </Link>
               );
             })}
