@@ -44,6 +44,19 @@ function getProductDate(product: Product) {
   return toSortTimestamp((product as Product & { createdAt?: string | Date }).createdAt);
 }
 
+function compareAtPrice(price: number, discountPercent?: number) {
+  const dp = Math.max(0, Math.min(100, Number(discountPercent || 0)));
+  if (dp <= 0) return price;
+  return Math.round(price / (1 - dp / 100));
+}
+
+function averageRating(product: any) {
+  const reviews: any[] = (product as any).reviews ?? [];
+  if (!Array.isArray(reviews) || reviews.length === 0) return { avg: 0, count: 0 };
+  const sum = reviews.reduce((s, r) => s + (r?.rating || 0), 0);
+  return { avg: sum / reviews.length, count: reviews.length };
+}
+
 export default function AccessoriesPage() {
   const [sortBy, setSortBy] = useState<SortOption>("Newest");
   const [products, setProducts] = useState<Product[]>([]);
@@ -157,6 +170,12 @@ export default function AccessoriesPage() {
                       sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 16vw"
                     />
 
+                    {product.discountPercent ? (
+                      <div className="absolute left-2 top-2 rounded-full bg-[#E8735F] px-3 py-1 text-xs font-bold text-white">
+                        {product.discountPercent}% OFF
+                      </div>
+                    ) : null}
+
                     <button
                       type="button"
                       onClick={(event) => {
@@ -177,9 +196,19 @@ export default function AccessoriesPage() {
                     )}
                   </div>
 
-                  <div className="mt-3 flex w-4/5 flex-col items-center text-center">
-                    <p className="truncate text-lg font-bold text-[#293A55]">{product.name}</p>
-                    <p className="text-sm font-medium text-[#5c5445]">PKR {product.price.toLocaleString()}</p>
+                  <div className="mt-3 flex w-11/12 flex-col items-start text-left">
+                    <p className="w-full break-words text-base font-bold leading-snug text-[#293A55] sm:text-lg">
+                      {product.name}
+                    </p>
+                    <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
+                    <p className="text-sm text-[#9a8f7f] line-through">PKR {compareAtPrice(product.price, (product as any).discountPercent).toLocaleString()}</p>
+                    <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
+                      <span className="flex items-center gap-1">
+                        <span className="text-yellow-500">★</span>
+                        <span className="font-semibold">{Number(averageRating(product).avg).toFixed(1)}</span>
+                      </span>
+                      <span className="text-[#7A6F5D]">({averageRating(product).count})</span>
+                    </div>
                   </div>
                 </Link>
               );

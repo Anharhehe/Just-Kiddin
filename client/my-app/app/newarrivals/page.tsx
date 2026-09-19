@@ -85,6 +85,7 @@ export default function NewArrivalPage() {
   const [cutoffAt, setCutoffAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const { favouriteIds, toggle: toggleFav } = useFavourites();
 
   useEffect(() => {
@@ -153,10 +154,10 @@ export default function NewArrivalPage() {
   }, [cutoffAt, products, selectedFilter, sortBy]);
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: FONT_HEADING }}>
+    <div className="min-h-screen w-full overflow-x-hidden bg-white" style={{ fontFamily: FONT_HEADING }}>
       <main className={`${CONTAINER} py-8 sm:py-10`}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8f836f]">New Arrivals</p>
             <h1 className="mt-2 text-3xl font-extrabold text-[#293A55] sm:text-4xl">Freshly added picks</h1>
             <p className="mt-2 text-sm text-[#6e6454]">
@@ -179,7 +180,52 @@ export default function NewArrivalPage() {
           </div>
         </div>
 
-        <div className="mb-8 flex flex-wrap gap-3">
+        {/* Mobile: custom dropdown */}
+        <div className="relative mb-8 w-full min-w-0 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileFilterOpen((open) => !open)}
+            className="flex w-full max-w-full items-center justify-between rounded-2xl border border-[#e6ddcd] bg-white py-2.5 pl-4 pr-3 text-sm font-semibold text-[#293A55] outline-none"
+            style={{ fontFamily: FONT_HEADING }}
+          >
+            <span className="truncate">{selectedFilter?.label ?? "All Categories"}</span>
+            <ChevronDown className={`h-4 w-4 flex-shrink-0 text-[#8a8071] transition-transform ${mobileFilterOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {mobileFilterOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMobileFilterOpen(false)} />
+              <div className="absolute left-0 right-0 top-full z-20 mt-2 w-full max-w-full overflow-hidden rounded-2xl border border-[#e6ddcd] bg-white shadow-[0_16px_40px_rgba(0,0,0,0.12)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFilter(null);
+                    setMobileFilterOpen(false);
+                  }}
+                  className={`block w-full truncate px-4 py-2.5 text-left text-sm font-semibold ${selectedFilter === null ? "bg-[#293A55] text-white" : "text-[#293A55] hover:bg-black/[0.03]"}`}
+                >
+                  All Categories
+                </button>
+                {FILTERS.map((filter) => (
+                  <button
+                    key={filter.label}
+                    type="button"
+                    onClick={() => {
+                      setSelectedFilter(filter);
+                      setMobileFilterOpen(false);
+                    }}
+                    className={`block w-full truncate px-4 py-2.5 text-left text-sm font-semibold ${selectedFilter === filter ? "bg-[#293A55] text-white" : "text-[#293A55] hover:bg-black/[0.03]"}`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Desktop: pill buttons */}
+        <div className="mb-8 hidden flex-wrap gap-3 sm:flex">
           {FILTERS.map((filter) => {
             const active = selectedFilter === filter;
 
@@ -252,7 +298,9 @@ export default function NewArrivalPage() {
                   </div>
 
                   <div className="mt-3 flex w-11/12 flex-col items-start text-left">
-                    <p className="truncate text-lg font-bold text-[#293A55]">{product.name}</p>
+                    <p className="w-full break-words text-base font-bold leading-snug text-[#293A55] sm:text-lg">
+                      {product.name}
+                    </p>
                     <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
                     <p className="text-sm text-[#9a8f7f] line-through">PKR {compareAtPrice(product.price, (product as any).discountPercent).toLocaleString()}</p>
                     <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">

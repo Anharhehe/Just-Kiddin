@@ -53,16 +53,23 @@ function averageRating(product: any) {
   return { avg: sum / reviews.length, count: reviews.length };
 }
 
+function matchesFilter(product: Product, filter: FilterOption | null) {
+  if (!filter) {
+    return true;
+  }
+
+  const wantedGender = filter.gender === "boys" ? "boy" : "girl";
+  return product.ageGroup === filter.ageGroup && (product.gender === wantedGender || product.gender === "unisex");
+}
+
 export default function Under999Page() {
-  const [ageGroup, setAgeGroup] = useState<AgeGroup>("newborn");
-  const [gender, setGender] = useState<Gender>("boys");
+  const [selectedFilter, setSelectedFilter] = useState<FilterOption | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>("Newest");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const { favouriteIds, toggle: toggleFav } = useFavourites();
-
-  const genderKey = gender === "boys" ? "boy" : "girl";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -72,10 +79,7 @@ export default function Under999Page() {
       setError(null);
 
       try {
-        const response = await fetch(
-          `/api/products?ageGroup=${ageGroup}&active=true`,
-          { signal: controller.signal }
-        );
+        const response = await fetch(`/api/products?active=true`, { signal: controller.signal });
 
         if (!response.ok) {
           throw new Error("Failed to load products");
@@ -99,29 +103,34 @@ export default function Under999Page() {
     void loadProducts();
 
     return () => controller.abort();
-  }, [ageGroup, genderKey]);
+  }, []);
 
   const visibleProducts = useMemo(() => {
     const filtered = products.filter((product) => {
-      // ageGroup and gender selection applied client-side; include unisex in both boy/girl views
-      const matchesAge = product.ageGroup === ageGroup;
-      const genderKeyLocal = gender === "boys" ? "boy" : "girl";
-      const matchesGender = product.gender === genderKeyLocal || product.gender === "unisex";
       const underLimit = product.price < 1000;
-      return matchesAge && matchesGender && underLimit;
+      return underLimit && matchesFilter(product, selectedFilter);
     });
 
-    if (sortBy === "Price: Low to High") return filtered.sort((l, r) => l.price - r.price);
-    if (sortBy === "Price: High to Low") return filtered.sort((l, r) => r.price - l.price);
-    if (sortBy === "Oldest") return filtered.sort((l, r) => getProductDate(l) - getProductDate(r));
-    return filtered.sort((l, r) => getProductDate(r) - getProductDate(l));
-  }, [products, sortBy, ageGroup, gender]);
+    if (sortBy === "Price: Low to High") {
+      return [...filtered].sort((left, right) => left.price - right.price);
+    }
+
+    if (sortBy === "Price: High to Low") {
+      return [...filtered].sort((left, right) => right.price - left.price);
+    }
+
+    if (sortBy === "Oldest") {
+      return [...filtered].sort((left, right) => getProductDate(left) - getProductDate(right));
+    }
+
+    return [...filtered].sort((left, right) => getProductDate(right) - getProductDate(left));
+  }, [products, selectedFilter, sortBy]);
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: FONT_HEADING }}>
+    <div className="min-h-screen w-full overflow-x-hidden bg-white" style={{ fontFamily: FONT_HEADING }}>
       <main className={`${CONTAINER} py-8 sm:py-10`}>
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8f836f]">Under PKR 1000</p>
             <h1 className="mt-2 text-3xl font-extrabold text-[#293A55] sm:text-4xl">Our Special Budget Friendly Picks </h1>
           </div>
@@ -141,18 +150,60 @@ export default function Under999Page() {
           </div>
         </div>
 
-        <div className="mb-8 flex flex-wrap gap-3">
+        {/* Mobile: custom dropdown */}
+        <div className="relative mb-8 w-full min-w-0 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileFilterOpen((open) => !open)}
+            className="flex w-full max-w-full items-center justify-between rounded-2xl border border-[#e6ddcd] bg-white py-2.5 pl-4 pr-3 text-sm font-semibold text-[#293A55] outline-none"
+            style={{ fontFamily: FONT_HEADING }}
+          >
+            <span className="truncate">{selectedFilter?.label ?? "All Categories"}</span>
+            <ChevronDown className={`h-4 w-4 flex-shrink-0 text-[#8a8071] transition-transform ${mobileFilterOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {mobileFilterOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMobileFilterOpen(false)} />
+              <div className="absolute left-0 right-0 top-full z-20 mt-2 w-full max-w-full overflow-hidden rounded-2xl border border-[#e6ddcd] bg-white shadow-[0_16px_40px_rgba(0,0,0,0.12)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedFilter(null);
+                    setMobileFilterOpen(false);
+                  }}
+                  className={`block w-full truncate px-4 py-2.5 text-left text-sm font-semibold ${selectedFilter === null ? "bg-[#293A55] text-white" : "text-[#293A55] hover:bg-black/[0.03]"}`}
+                >
+                  All Categories
+                </button>
+                {FILTERS.map((filter) => (
+                  <button
+                    key={filter.label}
+                    type="button"
+                    onClick={() => {
+                      setSelectedFilter(filter);
+                      setMobileFilterOpen(false);
+                    }}
+                    className={`block w-full truncate px-4 py-2.5 text-left text-sm font-semibold ${selectedFilter === filter ? "bg-[#293A55] text-white" : "text-[#293A55] hover:bg-black/[0.03]"}`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Desktop: pill buttons */}
+        <div className="mb-8 hidden flex-wrap gap-3 sm:flex">
           {FILTERS.map((filter) => {
-            const active = filter.ageGroup === ageGroup && filter.gender === gender;
+            const active = selectedFilter === filter;
 
             return (
               <button
                 key={`${filter.label}-desktop`}
                 type="button"
-                onClick={() => {
-                  setAgeGroup(filter.ageGroup);
-                  setGender(filter.gender);
-                }}
+                onClick={() => setSelectedFilter((current) => (current === filter ? null : filter))}
                 className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${active ? "border-[#293A55] bg-[#293A55] text-white" : "border-[#e6ddcd] bg-white text-[#293A55] hover:bg-black/[0.03]"}`}
               >
                 {filter.label}
@@ -168,7 +219,6 @@ export default function Under999Page() {
         ) : visibleProducts.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-[#d9c8ae] bg-white px-6 py-14 text-center shadow-[0_16px_40px_rgba(0,0,0,0.04)]">
             <h2 className="text-2xl font-extrabold text-[#293A55]">No products under PKR 1000 yet</h2>
-            
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 sm:gap-x-8 sm:gap-y-12">
@@ -182,53 +232,55 @@ export default function Under999Page() {
                   className="group flex cursor-pointer flex-col items-center"
                 >
                   <div className="relative aspect-square w-11/12 overflow-hidden rounded-xl border border-[#eee1cd] bg-[#F3E9DC] shadow-[0_4px_12px_rgba(41,58,85,0.06)] transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_10px_22px_rgba(41,58,85,0.14)]">
-                      <Image
-                        src={getProductImage(product)}
-                        alt={product.name}
-                        fill
-                        className="object-cover transition-transform duration-300 group-hover:scale-105"
-                        sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 16vw"
-                      />
+                    <Image
+                      src={getProductImage(product)}
+                      alt={product.name}
+                      fill
+                      className="object-cover transition-transform duration-300 group-hover:scale-105"
+                      sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 16vw"
+                    />
 
-                      {/* discount badge */}
-                      {product.discountPercent ? (
-                        <div className="absolute left-2 top-2 rounded-full bg-[#E8735F] px-3 py-1 text-xs font-bold text-white">
-                          {product.discountPercent}% OFF
-                        </div>
-                      ) : null}
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          void toggleFav(product);
-                        }}
-                        className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-105"
-                        aria-label="Add to wishlist"
-                      >
-                        <Heart className={`h-3.5 w-3.5 ${liked ? "fill-red-500 text-red-500" : "text-[#293A55]"}`} />
-                      </button>
-
-                      {!product.inStock && (
-                        <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
-                          Out of stock
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-3 flex w-11/12 flex-col items-start text-left">
-                      <p className="truncate text-lg font-bold text-[#293A55]">{product.name}</p>
-                      <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
-                      <p className="text-sm text-[#9a8f7f] line-through">PKR {compareAtPrice(product.price, (product as any).discountPercent).toLocaleString()}</p>
-                      <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
-                        <span className="flex items-center gap-1">
-                          <span className="text-yellow-500">★</span>
-                          <span className="font-semibold">{Number(averageRating(product).avg).toFixed(1)}</span>
-                        </span>
-                        <span className="text-[#7A6F5D]">({averageRating(product).count})</span>
+                    {/* discount badge */}
+                    {product.discountPercent ? (
+                      <div className="absolute left-2 top-2 rounded-full bg-[#E8735F] px-3 py-1 text-xs font-bold text-white">
+                        {product.discountPercent}% OFF
                       </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleFav(product);
+                      }}
+                      className="absolute right-2 top-2 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-105"
+                      aria-label="Add to wishlist"
+                    >
+                      <Heart className={`h-3.5 w-3.5 ${liked ? "fill-red-500 text-red-500" : "text-[#293A55]"}`} />
+                    </button>
+
+                    {!product.inStock && (
+                      <span className="absolute left-2 top-2 rounded-full bg-black/70 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+                        Out of stock
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-3 flex w-11/12 flex-col items-start text-left">
+                    <p className="w-full break-words text-base font-bold leading-snug text-[#293A55] sm:text-lg">
+                      {product.name}
+                    </p>
+                    <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
+                    <p className="text-sm text-[#9a8f7f] line-through">PKR {compareAtPrice(product.price, (product as any).discountPercent).toLocaleString()}</p>
+                    <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
+                      <span className="flex items-center gap-1">
+                        <span className="text-yellow-500">★</span>
+                        <span className="font-semibold">{Number(averageRating(product).avg).toFixed(1)}</span>
+                      </span>
+                      <span className="text-[#7A6F5D]">({averageRating(product).count})</span>
                     </div>
+                  </div>
                 </Link>
               );
             })}

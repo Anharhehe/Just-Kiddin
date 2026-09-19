@@ -684,11 +684,13 @@ export default function ProductDetailPage({
                 <span className="text-base font-medium text-[#9a8f7f] line-through">
                   Rs {compareAtPrice.toLocaleString()}
                 </span>
-                <span className="ml-10 text-3xl font-bold text-[#E8735F]" style={{ fontFamily: FONT_HEADING }}>
-                  Rs {product.price.toLocaleString()}
-                </span>
-                <span className="ml-10 rounded-full bg-[#7FA08D]/15 px-2 py-0.5 text-xl font-bold text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
+                <span className="ml-35 rounded-full bg-[#7FA08D]/15 px-2 py-0.5 text-xl font-bold text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
                   Save {discountPercent}%
+                </span>
+              </div>
+              <div className="mt-1.5">
+                <span className="text-3xl font-bold text-[#E8735F]" style={{ fontFamily: FONT_HEADING }}>
+                  Rs {product.price.toLocaleString()}
                 </span>
               </div>
               <button

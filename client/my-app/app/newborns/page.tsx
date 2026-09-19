@@ -328,7 +328,7 @@ export default function NewbornsPage() {
                         </div>
 
                         <div className="mt-3 text-left">
-                          <p className="text-base font-bold text-[#293A55] truncate" title={product.name}>{product.name}</p>
+                          <p className="w-full break-words text-base font-bold leading-snug text-[#293A55]" title={product.name}>{product.name}</p>
                           <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
                           <p className="text-sm text-[#9a8f7f] line-through">PKR {Math.round((product.price) / (1 - ((product as any).discountPercent || 0)/100)).toLocaleString()}</p>
                           <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
