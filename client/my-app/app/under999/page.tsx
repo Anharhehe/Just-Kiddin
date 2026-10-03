@@ -7,6 +7,7 @@ import { ChevronDown, Heart } from "lucide-react";
 import type { Product } from "../data/demo";
 import { useFavourites } from "../hooks/useFavourites";
 import { getProductImage } from "../utils/product-image";
+import { getProductCutoffPrice } from "../utils/product-pricing";
 
 type Gender = "boys" | "girls";
 type AgeGroup = "newborn" | "toddler";
@@ -38,12 +39,6 @@ function toSortTimestamp(value: string | Date | undefined) {
 
 function getProductDate(product: Product) {
   return toSortTimestamp((product as Product & { createdAt?: string | Date }).createdAt);
-}
-
-function compareAtPrice(price: number, discountPercent?: number) {
-  const dp = Math.max(0, Math.min(100, Number(discountPercent || 0)));
-  if (dp <= 0) return price;
-  return Math.round(price / (1 - dp / 100));
 }
 
 function averageRating(product: any) {
@@ -272,7 +267,7 @@ export default function Under999Page() {
                       {product.name}
                     </p>
                     <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
-                    <p className="text-sm text-[#9a8f7f] line-through">PKR {compareAtPrice(product.price, (product as any).discountPercent).toLocaleString()}</p>
+                    <p className="text-sm text-[#9a8f7f] line-through">PKR {getProductCutoffPrice(product).toLocaleString()}</p>
                     <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
                       <span className="flex items-center gap-1">
                         <span className="text-yellow-500">★</span>

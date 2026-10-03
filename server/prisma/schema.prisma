@@ -129,6 +129,7 @@ model Product {
   gender           ProductGender?
   tags             String[]
   price            Int
+  originalPrice    Int?
   discountPercent  Int             @default(15)
   description      String?
   tableDescription String[]        @default([])

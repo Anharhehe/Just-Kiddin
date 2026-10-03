@@ -27,6 +27,7 @@ export interface Product {
   gender: "boy" | "girl" | "unisex" | null;
   tags: string[];
   price: number;
+  originalPrice?: number | null;
   discountPercent?: number;
   image: any;
   images?: ProductImage[];

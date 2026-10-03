@@ -6,6 +6,18 @@ import { prisma } from "../lib/prisma";
 import { supabaseAdmin } from "../lib/supabase";
 
 const PRODUCT_IMAGE_BUCKET = "product-images";
+function getOriginalPrice(price: number, discountPercent: number, originalPrice?: number | null) {
+  if (typeof originalPrice === "number") {
+    return originalPrice;
+  }
+
+  if (discountPercent <= 0 || discountPercent >= 100) {
+    return price;
+  }
+
+  return Math.round(price / (1 - discountPercent / 100));
+}
+
 
 const ageGroupSchema = z.enum(["newborn", "toddler", "accessories"]);
 const genderSchema = z.enum(["boy", "girl", "unisex"]);
@@ -18,6 +30,7 @@ const productPayloadSchema = z.object({
   gender: genderSchema.nullable().optional(),
   tags: z.array(z.string().trim().min(1)).default([]),
   price: z.number().int().nonnegative(),
+  originalPrice: z.number().int().nonnegative().optional(),
   discountPercent: z.number().int().min(0).max(100).default(15),
   description: z.string().max(2000).optional().or(z.literal("")),
   tableDescription: z.array(z.string()).max(5).default(["", "", "", "", ""]),
@@ -118,6 +131,7 @@ function normalizeProduct(product: {
   gender: string | null;
   tags: string[];
   price: number;
+  originalPrice: number | null;
   discountPercent: number;
   description: string | null;
   tableDescription?: string[] | null;
@@ -191,6 +205,7 @@ function normalizeProduct(product: {
     gender: product.gender ? product.gender.toLowerCase() : null,
     tags: product.tags,
     price: product.price,
+    originalPrice: getOriginalPrice(product.price, product.discountPercent, product.originalPrice),
     discountPercent: product.discountPercent,
     description: product.description,
     sizes: product.sizes,
@@ -338,6 +353,7 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         gender: null,
         tags: parsed.data.tags,
         price: parsed.data.price,
+        originalPrice: getOriginalPrice(parsed.data.price, parsed.data.discountPercent, parsed.data.originalPrice),
         discountPercent: parsed.data.discountPercent,
         description: parsed.data.description ?? null,
         tableDescription: parsed.data.tableDescription ?? [],
@@ -359,6 +375,7 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL" | "UNISEX",
         tags: parsed.data.tags,
         price: parsed.data.price,
+        originalPrice: getOriginalPrice(parsed.data.price, parsed.data.discountPercent, parsed.data.originalPrice),
         discountPercent: parsed.data.discountPercent,
         description: parsed.data.description ?? null,
         tableDescription: parsed.data.tableDescription ?? [],
@@ -436,6 +453,8 @@ export async function updateProduct(req: { params: { productId?: string }; body:
         gender: null,
         ...(parsed.data.tags ? { tags: parsed.data.tags } : {}),
         ...(typeof parsed.data.price === "number" ? { price: parsed.data.price } : {}),
+        ...(typeof parsed.data.originalPrice === "number" ? { originalPrice: parsed.data.originalPrice } : {}),
+        ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
         ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description ?? null } : {}),
         ...(typeof parsed.data.tableDescription !== "undefined" ? { tableDescription: parsed.data.tableDescription } : {}),
         ...(parsed.data.sizes ? { sizes: parsed.data.sizes } : {}),
@@ -457,6 +476,7 @@ export async function updateProduct(req: { params: { productId?: string }; body:
         ...(typeof parsed.data.gender !== "undefined" ? { gender: parsed.data.gender?.toUpperCase() as "BOY" | "GIRL" | "UNISEX" } : {}),
         ...(parsed.data.tags ? { tags: parsed.data.tags } : {}),
         ...(typeof parsed.data.price === "number" ? { price: parsed.data.price } : {}),
+        ...(typeof parsed.data.originalPrice === "number" ? { originalPrice: parsed.data.originalPrice } : {}),
         ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
         ...(typeof parsed.data.discountPercent === "number" ? { discountPercent: parsed.data.discountPercent } : {}),
         ...(typeof parsed.data.description !== "undefined" ? { description: parsed.data.description ?? null } : {}),

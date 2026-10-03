@@ -10,6 +10,7 @@ import { products as allProducts, type Product } from "../data/demo";
 import { useFavourites } from "../hooks/useFavourites";
 import { useCart } from "../context/CartContext";
 import { getProductGallery, getProductImage } from "../utils/product-image";
+import { getProductCutoffPrice } from "../utils/product-pricing";
 
 const FONT_HEADING = "'Quicksand', sans-serif";
 const FONT_BODY = "'Quicksand', sans-serif";
@@ -287,13 +288,7 @@ export default function ProductDetailPage({
 
 
   const discountPercent = Math.min(100, Math.max(0, product.discountPercent ?? 15));
-  const compareAtPrice = useMemo(() => {
-    if (discountPercent <= 0 || discountPercent >= 100) {
-      return product.price;
-    }
-
-    return Math.round(product.price / (1 - discountPercent / 100));
-  }, [discountPercent, product.price]);
+  const compareAtPrice = getProductCutoffPrice(product);
 
   const relatedSource = relatedProducts ?? allProducts;
 
@@ -680,17 +675,15 @@ export default function ProductDetailPage({
               <h1 className="mt-1.5 text-2xl font-extrabold leading-tight text-[#2F2A22] sm:text-3xl" style={{ fontFamily: FONT_HEADING }}>
                 {product.name}
               </h1>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                <span className="text-base font-medium text-[#9a8f7f] line-through">
-                  Rs {compareAtPrice.toLocaleString()}
+              <div className="mt-2 flex flex-nowrap items-baseline gap-2 whitespace-nowrap">
+                <span className="text-2xl font-bold text-[#E8735F] sm:text-3xl" style={{ fontFamily: FONT_HEADING }}>
+                  PKR {product.price.toLocaleString()}
                 </span>
-                <span className="ml-35 rounded-full bg-[#7FA08D]/15 px-2 py-0.5 text-xl font-bold text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
-                  Save {discountPercent}%
+                <span className="text-base font-medium text-[#9a8f7f] line-through sm:text-lg">
+                  PKR {compareAtPrice.toLocaleString()}
                 </span>
-              </div>
-              <div className="mt-1.5">
-                <span className="text-3xl font-bold text-[#E8735F]" style={{ fontFamily: FONT_HEADING }}>
-                  Rs {product.price.toLocaleString()}
+                <span className="rounded-full bg-[#7FA08D]/15 px-2 py-0.5 text-base font-bold text-[#7FA08D] sm:text-lg" style={{ fontFamily: FONT_HEADING }}>
+                  -{discountPercent}% off
                 </span>
               </div>
               <button

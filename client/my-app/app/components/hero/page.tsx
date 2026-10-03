@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronDown, Heart } from "lucide-react";
 import { useFavourites } from "../../hooks/useFavourites";
 import { getProductImage } from "../../utils/product-image";
+import { getProductCutoffPrice } from "../../utils/product-pricing";
 
 type ProductRecord = {
   id: string;
@@ -15,6 +16,7 @@ type ProductRecord = {
   gender: "boy" | "girl" | "unisex" | null;
   tags: string[];
   price: number;
+  originalPrice?: number | null;
   discountPercent?: number;
   image?: string | string[];
   images?: Array<{ url?: string; path?: string; altText?: string | null }>; 
@@ -259,12 +261,6 @@ function GiftIcon({ color }: { color: string }) {
 
 /* --------------------------- Featured products grid --------------------------- */
 
-function compareAtPrice(price: number, discountPercent?: number) {
-  const dp = Math.max(0, Math.min(100, Number(discountPercent || 0)));
-  if (dp <= 0) return price;
-  return Math.round(price / (1 - dp / 100));
-}
-
 function averageRating(product: ProductRecord) {
   const reviews: Array<{ rating?: number }> = product.reviews ?? [];
   if (!Array.isArray(reviews) || reviews.length === 0) return { avg: 0, count: 0 };
@@ -358,7 +354,7 @@ function FeaturedProducts() {
               const genderSegment = product.gender === "boy" ? "boys" : product.gender === "girl" ? "girls" : "accessories";
               const categorySlug = product.tags.find((tag) => tag !== product.ageGroup && tag !== product.gender) ?? (product.category ?? "accessories").toLowerCase().replace(/\s+/g, "-");
               const rating = averageRating(product);
-              const comparePrice = compareAtPrice(product.price, product.discountPercent);
+              const comparePrice = getProductCutoffPrice(product);
 
               return (
                 <Link

@@ -7,6 +7,7 @@ import { Heart, ChevronDown } from "lucide-react";
 import type { Product } from "../data/demo";
 import { useFavourites } from "../hooks/useFavourites";
 import { getProductImage } from "../utils/product-image";
+import { getProductCutoffPrice } from "../utils/product-pricing";
 
 /* ------------------------------------------------------------------ */
 /*  Types & static config                                             */
@@ -330,7 +331,7 @@ export default function NewbornsPage() {
                         <div className="mt-3 text-left">
                           <p className="w-full break-words text-base font-bold leading-snug text-[#293A55]" title={product.name}>{product.name}</p>
                           <p className="mt-1 text-2xl font-extrabold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
-                          <p className="text-sm text-[#9a8f7f] line-through">PKR {Math.round((product.price) / (1 - ((product as any).discountPercent || 0)/100)).toLocaleString()}</p>
+                          <p className="text-sm text-[#9a8f7f] line-through">PKR {getProductCutoffPrice(product).toLocaleString()}</p>
                           <div className="mt-1 flex items-center gap-2 text-sm text-[#5c5445]">
                             <span className="flex items-center gap-1"><span className="text-yellow-500">★</span><span className="font-semibold">{(() => { const rs = (product as any).reviews ?? []; if (!Array.isArray(rs) || rs.length===0) return '0.0'; const s = rs.reduce((a:any,b:any)=>a+(b?.rating||0),0); return (s/rs.length).toFixed(1); })()}</span></span>
                             <span className="text-[#7A6F5D]">({((product as any).reviews ?? []).length || 0})</span>

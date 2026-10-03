@@ -128,6 +128,7 @@ type Product = {
   gender: "boy" | "girl" | "unisex" | null;
   tags: string[];
   price: number;
+  originalPrice?: number | null;
   discountPercent?: number;
   description?: string | null;
   sizes: string[];
@@ -257,8 +258,8 @@ type ProductFormState = {
   ageGroup: "newborn" | "toddler" | "accessories";
   gender: "boy" | "girl" | "unisex" | null;
   tags: string;
-  price: string;
-  discountPercent: string;
+  originalPrice: string;
+  additionalDiscountPercent: string;
   description: string;
   tableDescription: string[];
   sizes: string[];
@@ -277,8 +278,8 @@ const emptyForm: ProductFormState = {
   ageGroup: "newborn" as "newborn" | "toddler" | "accessories",
   gender: "boy" as "boy" | "girl" | null,
   tags: "",
-  price: "",
-  discountPercent: "15",
+  originalPrice: "",
+  additionalDiscountPercent: "0",
   description: "",
   tableDescription: ["", "", "", "", ""],
   sizes: [],
@@ -424,7 +425,7 @@ function formatColorLabel(value: string) {
   return isHexColor(value) ? value.toUpperCase() : value;
 }
 
-function calculateCompareAtPrice(price: string | number, discountPercent: string | number) {
+function calculateLegacyOriginalPrice(price: string | number, discountPercent: string | number) {
   const numericPrice = Number(price) || 0;
   const numericDiscount = Math.min(100, Math.max(0, Number(discountPercent) || 0));
 
@@ -433,6 +434,18 @@ function calculateCompareAtPrice(price: string | number, discountPercent: string
   }
 
   return Math.round(numericPrice / (1 - numericDiscount / 100));
+}
+
+function clampAdditionalDiscount(value: string | number) {
+  return Math.min(85, Math.max(0, Math.round(Number(value) || 0)));
+}
+
+function calculateFinalPrice(originalPrice: string | number, discountPercent: number) {
+  return Math.round((Number(originalPrice) || 0) * (1 - Math.min(100, Math.max(0, discountPercent)) / 100));
+}
+
+function calculateCutoffPrice(originalPrice: string | number) {
+  return Math.round((Number(originalPrice) || 0) * 1.15);
 }
 
 function formatVariantLabel(size: string | null, color: string | null) {
@@ -766,8 +779,8 @@ export default function AdminPage() {
       ageGroup: selectedProduct.ageGroup,
       gender: selectedProduct.gender,
       tags: commaJoin(selectedProduct.tags),
-      price: String(selectedProduct.price),
-      discountPercent: String(selectedProduct.discountPercent ?? 15),
+      originalPrice: String(selectedProduct.originalPrice ?? calculateLegacyOriginalPrice(selectedProduct.price, selectedProduct.discountPercent ?? 15)),
+      additionalDiscountPercent: String(clampAdditionalDiscount((selectedProduct.discountPercent ?? 15) - 15)),
       description: selectedProduct.description ?? "",
       tableDescription: normalizedTable,
       sizes: sanitizeSizesForAgeGroup(selectedProduct.ageGroup, selectedProduct.sizes),
@@ -1024,8 +1037,9 @@ export default function AdminPage() {
       ageGroup: form.ageGroup,
       gender: form.ageGroup === "accessories" ? null : form.gender,
       tags: parseCommaList(form.tags),
-      price: Number(form.price),
-      discountPercent: Number(form.discountPercent),
+      price: calculateFinalPrice(form.originalPrice, clampAdditionalDiscount(form.additionalDiscountPercent)),
+      originalPrice: Number(form.originalPrice),
+      discountPercent: 15 + clampAdditionalDiscount(form.additionalDiscountPercent),
       description: form.description,
       tableDescription: form.tableDescription,
       sizes: form.sizes,
@@ -1749,19 +1763,32 @@ export default function AdminPage() {
                       )}
                     </select>
                   </Field>
-                  <Field label="Price"><input type="number" value={form.price} onChange={(event) => setForm((current) => ({ ...current, price: event.target.value }))} className={INPUT_CLASS} /></Field>
-                  <Field label="Discount (%)">
+                  <Field label="Original Price (PKR)"><input type="number" min="0" step="1" value={form.originalPrice} onChange={(event) => setForm((current) => ({ ...current, originalPrice: event.target.value }))} className={INPUT_CLASS} /></Field>
+                  <Field label="Fixed Discount (%)">
+                    <input
+                      type="number"
+                      value="15"
+                      readOnly
+                      className={`${INPUT_CLASS} cursor-not-allowed bg-black/5`}
+                    />
+                  </Field>
+                  <Field label="Additional Discount on Original Price (%)">
                     <input
                       type="number"
                       min="0"
-                      max="100"
-                      value={form.discountPercent}
-                      onChange={(event) => setForm((current) => ({ ...current, discountPercent: event.target.value }))}
+                      max="85"
+                      step="1"
+                      value={form.additionalDiscountPercent}
+                      onChange={(event) => setForm((current) => ({ ...current, additionalDiscountPercent: event.target.value }))}
                       className={INPUT_CLASS}
                     />
                   </Field>
                   <div className="rounded-3xl border border-dashed border-[#e7d7bf] bg-[#fffaf2] px-4 py-3 text-sm text-[var(--muted)] md:col-span-2">
-                    Displayed price: <span className="font-semibold text-[var(--foreground)]">{formatMoney(calculateCompareAtPrice(form.price, form.discountPercent))}</span>
+                    Cutoff price: <span className="font-semibold text-[var(--foreground)]">{formatMoney(calculateCutoffPrice(form.originalPrice))}</span>
+                    <span className="mx-2">·</span>
+                    Total discount: <span className="font-semibold text-[var(--foreground)]">{15 + clampAdditionalDiscount(form.additionalDiscountPercent)}%</span>
+                    <span className="mx-2">·</span>
+                    Final price: <span className="font-semibold text-[var(--foreground)]">{formatMoney(calculateFinalPrice(form.originalPrice, clampAdditionalDiscount(form.additionalDiscountPercent)))}</span>
                   </div>
                   {form.ageGroup !== "accessories" ? (
                     <Field label="Sizes" className="md:col-span-2">
