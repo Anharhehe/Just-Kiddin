@@ -33,6 +33,7 @@ const productPayloadSchema = z.object({
   lowStockThreshold: z.number().int().min(0).default(5),
   isActive: z.boolean().default(true),
   isFeatured: z.boolean().default(false),
+  isNewArrival: z.boolean().default(false),
 }).superRefine((value, context) => {
   if (value.ageGroup === "accessories") {
     if (value.category !== null && typeof value.category !== "undefined") {
@@ -128,6 +129,7 @@ function normalizeProduct(product: {
   lowStockThreshold: number;
   isActive: boolean;
   isFeatured: boolean;
+  isNewArrival?: boolean | null;
   createdAt: Date;
   updatedAt: Date;
   images: Array<{
@@ -200,6 +202,7 @@ function normalizeProduct(product: {
     inStock: product.stockQuantity > 0,
     isActive: product.isActive,
     isFeatured: product.isFeatured,
+    isNewArrival: Boolean(product.isNewArrival),
     image: imageList.length <= 1 ? imageList[0]?.url ?? "/demo.png" : imageList.map((image) => image.url),
     images: imageList,
     tableDescription: product.tableDescription ?? [],
@@ -346,6 +349,7 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         lowStockThreshold: parsed.data.lowStockThreshold,
         isActive: parsed.data.isActive,
         isFeatured: parsed.data.isFeatured,
+        isNewArrival: parsed.data.isNewArrival,
       }
     : {
         slug,
@@ -356,8 +360,8 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         tags: parsed.data.tags,
         price: parsed.data.price,
         discountPercent: parsed.data.discountPercent,
-      description: parsed.data.description ?? null,
-      tableDescription: parsed.data.tableDescription ?? [],
+        description: parsed.data.description ?? null,
+        tableDescription: parsed.data.tableDescription ?? [],
         sizes: parsed.data.sizes,
         colors: parsed.data.colors,
         variantStock,
@@ -366,6 +370,7 @@ export async function createProduct(req: { body: unknown }, res: Response) {
         lowStockThreshold: parsed.data.lowStockThreshold,
         isActive: parsed.data.isActive,
         isFeatured: parsed.data.isFeatured,
+        isNewArrival: parsed.data.isNewArrival,
       };
 
   const product = await prisma.product.create({
@@ -477,6 +482,93 @@ export async function updateProduct(req: { params: { productId?: string }; body:
     message: "Product updated successfully",
     data: {
       product: normalizeProduct(product),
+    },
+  });
+}
+
+const bulkProductUpdateSchema = z.object({
+  updates: z.array(z.object({
+    id: z.string().trim().min(1),
+    isFeatured: z.boolean().optional(),
+    isNewArrival: z.boolean().optional(),
+  })).min(1).max(1000),
+});
+
+export async function bulkUpdateProducts(req: { body: unknown }, res: Response) {
+  const parsed = bulkProductUpdateSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: parsed.error.issues[0]?.message ?? "Invalid bulk product update payload",
+      errors: parsed.error.flatten(),
+    });
+  }
+
+  const productIds = parsed.data.updates.map((update) => update.id);
+  const existingProducts = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: { id: true, isFeatured: true, isNewArrival: true },
+  });
+
+  const existingMap = new Map(existingProducts.map((product) => [product.id, product]));
+  const missing = parsed.data.updates.filter((update) => !existingMap.has(update.id));
+
+  if (missing.length > 0) {
+    return res.status(404).json({
+      success: false,
+      message: `Products not found: ${missing.map((item) => item.id).join(", ")}`,
+    });
+  }
+
+  const currentFeaturedIds = new Set(
+    existingProducts.filter((product) => product.isFeatured).map((product) => product.id)
+  );
+
+  for (const update of parsed.data.updates) {
+    if (typeof update.isFeatured === "boolean") {
+      if (update.isFeatured) {
+        currentFeaturedIds.add(update.id);
+      } else {
+        currentFeaturedIds.delete(update.id);
+      }
+    }
+  }
+
+  if (currentFeaturedIds.size > 12) {
+    return res.status(400).json({
+      success: false,
+      message: "Featured listing limit is 12 products only.",
+    });
+  }
+
+  const updatedProducts = await Promise.all(parsed.data.updates.map(async (update) => {
+    const data: Record<string, boolean> = {};
+
+    if (typeof update.isFeatured === "boolean") {
+      data.isFeatured = update.isFeatured;
+    }
+
+    if (typeof update.isNewArrival === "boolean") {
+      data.isNewArrival = update.isNewArrival;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return null;
+    }
+
+    return prisma.product.update({
+      where: { id: update.id },
+      data,
+      include: { images: true },
+    });
+  }));
+
+  return res.status(200).json({
+    success: true,
+    message: "Product list updated successfully",
+    data: {
+      products: updatedProducts.filter((product): product is NonNullable<typeof product> => Boolean(product)).map(normalizeProduct),
     },
   });
 }

@@ -32,6 +32,8 @@ const SIDEBAR_ITEMS = [
   { id: "orders", label: "Order Management", description: "Status and revenue" },
   { id: "reviews", label: "Review Management", description: "Ratings and feedback" },
   { id: "products", label: "Product Management", description: "CRUD and uploads" },
+  { id: "new-arrivals", label: "New Arrivals", description: "Bulk product selection" },
+  { id: "featured", label: "Featured Listing", description: "12 product cap" },
   { id: "queries", label: "Query Management", description: "Contact inbox" },
   { id: "inventory", label: "Inventory", description: "Stock control" },
 ] as const;
@@ -123,7 +125,7 @@ type Product = {
   name: string;
   category: string | null;
   ageGroup: "newborn" | "toddler" | "accessories";
-  gender: "boy" | "girl" | null;
+  gender: "boy" | "girl" | "unisex" | null;
   tags: string[];
   price: number;
   discountPercent?: number;
@@ -135,6 +137,7 @@ type Product = {
   lowStockThreshold: number;
   isActive: boolean;
   isFeatured: boolean;
+  isNewArrival: boolean;
   image: string | string[];
   images: ProductImage[];
 };
@@ -265,6 +268,7 @@ type ProductFormState = {
   lowStockThreshold: string;
   isActive: boolean;
   isFeatured: boolean;
+  isNewArrival: boolean;
 };
 
 const emptyForm: ProductFormState = {
@@ -284,6 +288,7 @@ const emptyForm: ProductFormState = {
   lowStockThreshold: "5",
   isActive: true,
   isFeatured: false,
+  isNewArrival: false,
 };
 
 const emptyReviewForm: ReviewFormState = {
@@ -492,6 +497,9 @@ export default function AdminPage() {
   const [queryView, setQueryView] = useState<QueryView>("unread");
   const [newArrivalsCutoff, setNewArrivalsCutoff] = useState<string | null>(null);
   const [savingNewArrivals, setSavingNewArrivals] = useState(false);
+  const [bulkNewArrivals, setBulkNewArrivals] = useState<string[]>([]);
+  const [bulkFeatured, setBulkFeatured] = useState<string[]>([]);
+  const [savingBulkSelections, setSavingBulkSelections] = useState(false);
   const [inventoryOnlyLowStock, setInventoryOnlyLowStock] = useState(false);
   const [colorPickerValue, setColorPickerValue] = useState("#111827");
   const colorImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -509,6 +517,11 @@ export default function AdminPage() {
     () => products.find((product) => product.id === selectedProductId) ?? null,
     [products, selectedProductId]
   );
+
+  useEffect(() => {
+    setBulkNewArrivals(products.filter((product) => product.isNewArrival).map((product) => product.id));
+    setBulkFeatured(products.filter((product) => product.isFeatured).map((product) => product.id));
+  }, [products]);
 
   const variantStockGrid = useMemo(
     () => reconcileVariantStock(form.variantStock, form.sizes, form.colors),
@@ -764,6 +777,7 @@ export default function AdminPage() {
       lowStockThreshold: String(selectedProduct.lowStockThreshold),
       isActive: selectedProduct.isActive,
       isFeatured: selectedProduct.isFeatured,
+      isNewArrival: selectedProduct.isNewArrival,
     });
     const firstColor = selectedProduct.colors.find((color) => isHexColor(color));
     if (firstColor) {
@@ -950,6 +964,47 @@ export default function AdminPage() {
     }
   }
 
+  async function saveBulkProductSelections(mode: "new-arrivals" | "featured") {
+    setSavingBulkSelections(true);
+    setNotice(null);
+
+    const selectionKey = mode === "new-arrivals" ? bulkNewArrivals : bulkFeatured;
+    const updates: Array<{ id: string; isFeatured?: boolean; isNewArrival?: boolean }> = products.map((product) => {
+      const selected = selectionKey.includes(product.id);
+
+      if (mode === "new-arrivals") {
+        return { id: product.id, isNewArrival: selected };
+      }
+
+      return { id: product.id, isFeatured: selected };
+    });
+
+    if (mode === "featured" && updates.filter((item) => item.isFeatured).length > 12) {
+      setNotice("Only 12 products can be selected as featured.");
+      setSavingBulkSelections(false);
+      return;
+    }
+
+    try {
+      const response = await apiFetch("/admin/products/bulk", {
+        method: "PATCH",
+        body: JSON.stringify({ updates }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.message || "Failed to save product selections");
+      }
+
+      setNotice(mode === "new-arrivals" ? "New arrivals updated successfully" : "Featured products updated successfully");
+      await refreshDashboard();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to save product selections");
+    } finally {
+      setSavingBulkSelections(false);
+    }
+  }
+
   async function saveProduct() {
     setSavingProduct(true);
     setNotice(null);
@@ -980,6 +1035,7 @@ export default function AdminPage() {
       lowStockThreshold: Number(form.lowStockThreshold),
       isActive: form.isActive,
       isFeatured: form.isFeatured,
+      isNewArrival: form.isNewArrival,
     };
 
     try {
@@ -1245,6 +1301,8 @@ export default function AdminPage() {
                     {activeSection === "orders" && "Manage order status and revenue"}
                     {activeSection === "reviews" && "Manage ratings and feedback"}
                     {activeSection === "products" && "Create and manage products"}
+                    {activeSection === "new-arrivals" && "Manage new arrivals"}
+                    {activeSection === "featured" && "Manage featured listing"}
                     {activeSection === "queries" && "Review and manage contact queries"}
                     {activeSection === "inventory" && "Stock levels and low inventory"}
                   </h2>
@@ -1257,6 +1315,16 @@ export default function AdminPage() {
                   >
                     <Plus className="h-4 w-4" />
                     New Product
+                  </button>
+                ) : null}
+                {(activeSection === "new-arrivals" || activeSection === "featured") ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection("products")}
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Manage Products
                   </button>
                 ) : null}
               </div>
@@ -1620,24 +1688,7 @@ export default function AdminPage() {
 
           {activeSection === "products" ? (
             <div className="space-y-6">
-              <div className="flex flex-col gap-3 rounded-[28px] border border-black/5 bg-[#fffaf2] p-5 shadow-[0_16px_40px_rgba(15,23,42,0.06)]">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-[var(--foreground)]">New Arrivals Control</p>
-                    <p className="text-sm text-[var(--muted)]">
-                      {newArrivalsCutoff ? `Products created after ${formatDate(newArrivalsCutoff)} will appear on the New Arrivals page.` : "All active products currently appear on the New Arrivals page."}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={refreshNewArrivalsCutoff}
-                    disabled={savingNewArrivals}
-                    className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#8b5a2b] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-                  >
-                    {savingNewArrivals ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />} Set new arrivals from now
-                  </button>
-                </div>
-              </div>
+
 
               <SectionCard title="Product Management" subtitle="Use dropdowns for available categories, then upload images from your file explorer.">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -2092,6 +2143,7 @@ export default function AdminPage() {
                 <div className="mt-5 flex flex-wrap items-center gap-5 text-sm text-[var(--foreground)]">
                   <label className="inline-flex items-center gap-2"><input type="checkbox" checked={form.isActive} onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))} /> Active</label>
                   <label className="inline-flex items-center gap-2"><input type="checkbox" checked={form.isFeatured} onChange={(event) => setForm((current) => ({ ...current, isFeatured: event.target.checked }))} /> Featured</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" checked={form.isNewArrival} onChange={(event) => setForm((current) => ({ ...current, isNewArrival: event.target.checked }))} /> New Arrival</label>
                 </div>
 
                 <div className="mt-6 flex flex-wrap gap-3">
@@ -2137,6 +2189,131 @@ export default function AdminPage() {
 
                   {filteredProducts.length === 0 ? <div className="rounded-2xl border border-dashed border-black/10 p-6 text-sm text-[var(--muted)]">No products found.</div> : null}
                 </div>
+              </SectionCard>
+            </div>
+          ) : null}
+
+          {activeSection === "new-arrivals" ? (
+            <div className="space-y-6">
+              <SectionCard title="Manage New Arrivals" subtitle="Choose which products should appear in the new arrivals section. You can uncheck products to remove them from the section at any time.">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" onClick={() => setBulkNewArrivals(products.map((product) => product.id))} className="inline-flex h-10 items-center rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5">
+                      Select all
+                    </button>
+                    <button type="button" onClick={() => setBulkNewArrivals([])} className="inline-flex h-10 items-center rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5">
+                      Clear all
+                    </button>
+                    <span className="rounded-full bg-[#fff8ef] px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-[#8b5a2b]">{bulkNewArrivals.length} selected</span>
+                  </div>
+
+                  <button type="button" onClick={() => void saveBulkProductSelections("new-arrivals")} disabled={savingBulkSelections} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#1f2937] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60">
+                    {savingBulkSelections ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />} Set as New Arrivals
+                  </button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {products.map((product) => {
+                    const selected = bulkNewArrivals.includes(product.id);
+                    const productImage = Array.isArray(product.image) ? product.image[0] : product.image || "/demo.png";
+
+                    return (
+                      <label key={product.id} className={`group flex cursor-pointer flex-col overflow-hidden rounded-[24px] border transition ${selected ? "border-[#8b5a2b] bg-[#fff8ef] shadow-[0_10px_30px_rgba(139,90,43,0.08)]" : "border-black/5 bg-white hover:border-black/10"}`}>
+                        <div className="relative">
+                          <img src={productImage} alt={product.name} className="h-48 w-full object-cover" />
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => {
+                              setBulkNewArrivals((current) => current.includes(product.id)
+                                ? current.filter((id) => id !== product.id)
+                                : [...current, product.id]);
+                            }}
+                            className="absolute left-3 top-3 h-5 w-5 accent-[#8b5a2b]"
+                          />
+                        </div>
+
+                        <div className="flex flex-1 flex-col p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-[var(--foreground)]">{product.name}</p>
+                            {product.isFeatured ? <span className="rounded-full bg-[#fff0d7] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#8b5a2b]">Featured</span> : null}
+                          </div>
+                          <p className="mt-1 text-sm text-[var(--muted)]">{product.category || "Uncategorized"} • {product.ageGroup}</p>
+                          <p className="mt-2 text-sm font-medium text-[var(--foreground)]">PKR {product.price.toLocaleString()}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+              </SectionCard>
+            </div>
+          ) : null}
+
+          {activeSection === "featured" ? (
+            <div className="space-y-6">
+              <SectionCard title="Manage Featured Listing" subtitle="Only 12 products can be featured at a time. Select or deselect any item below, then save the list.">
+                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="button" onClick={() => setBulkFeatured(products.slice(0, 12).map((product) => product.id))} className="inline-flex h-10 items-center rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5">
+                      Select top 12
+                    </button>
+                    <button type="button" onClick={() => setBulkFeatured([])} className="inline-flex h-10 items-center rounded-2xl border border-black/10 bg-white px-4 text-sm font-semibold text-[var(--foreground)] transition hover:bg-black/5">
+                      Clear all
+                    </button>
+                    <span className="rounded-full bg-[#fff8ef] px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-[#8b5a2b]">{bulkFeatured.length}/12 selected</span>
+                  </div>
+
+                  <button type="button" onClick={() => void saveBulkProductSelections("featured")} disabled={savingBulkSelections} className="inline-flex h-11 items-center gap-2 rounded-2xl bg-[#1f2937] px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60">
+                    {savingBulkSelections ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />} Save Featured Listing
+                  </button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {products.map((product) => {
+                    const selected = bulkFeatured.includes(product.id);
+                    const productImage = Array.isArray(product.image) ? product.image[0] : product.image || "/demo.png";
+
+                    return (
+                      <label key={product.id} className={`group flex cursor-pointer flex-col overflow-hidden rounded-[24px] border transition ${selected ? "border-[#8b5a2b] bg-[#fff8ef] shadow-[0_10px_30px_rgba(139,90,43,0.08)]" : "border-black/5 bg-white hover:border-black/10"}`}>
+                        <div className="relative">
+                          <img src={productImage} alt={product.name} className="h-48 w-full object-cover" />
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => {
+                              setBulkFeatured((current) => {
+                                const alreadySelected = current.includes(product.id);
+
+                                if (alreadySelected) {
+                                  return current.filter((id) => id !== product.id);
+                                }
+
+                                if (current.length >= 12) {
+                                  setNotice("Only 12 products can be selected as featured.");
+                                  return current;
+                                }
+
+                                return [...current, product.id];
+                              });
+                            }}
+                            className="absolute left-3 top-3 h-5 w-5 accent-[#8b5a2b]"
+                          />
+                        </div>
+
+                        <div className="flex flex-1 flex-col p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-[var(--foreground)]">{product.name}</p>
+                            {product.isNewArrival ? <span className="rounded-full bg-[#e0f2fe] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#0c4a6e]">New</span> : null}
+                          </div>
+                          <p className="mt-1 text-sm text-[var(--muted)]">{product.category || "Uncategorized"} • {product.ageGroup}</p>
+                          <p className="mt-2 text-sm font-medium text-[var(--foreground)]">PKR {product.price.toLocaleString()}</p>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
               </SectionCard>
             </div>
           ) : null}

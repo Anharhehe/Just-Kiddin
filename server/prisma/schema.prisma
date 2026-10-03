@@ -140,13 +140,14 @@ model Product {
   lowStockThreshold Int            @default(5)
   isActive         Boolean         @default(true)
   isFeatured       Boolean         @default(false)
+  isNewArrival     Boolean         @default(false)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   images           ProductImage[]
   reviews          Review[]
 
   @@index([ageGroup, gender, category])
-  @@index([isActive, isFeatured])
+  @@index([isActive, isFeatured, isNewArrival])
 }
 
 model ProductImage {

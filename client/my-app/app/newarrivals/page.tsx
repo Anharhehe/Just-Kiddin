@@ -19,10 +19,9 @@ type FilterOption = {
   accessories?: boolean;
 };
 
-type SiteSettingResponse = {
-  data?: {
-    cutoffAt?: string | null;
-  };
+type ProductRecord = Product & {
+  isNewArrival?: boolean;
+  createdAt?: string | Date;
 };
 
 const FONT_HEADING = "'Quicksand', sans-serif";
@@ -81,8 +80,7 @@ function matchesFilter(product: Product, filter: FilterOption | null) {
 export default function NewArrivalPage() {
   const [selectedFilter, setSelectedFilter] = useState<FilterOption | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>("Newest");
-  const [products, setProducts] = useState<Product[]>([]);
-  const [cutoffAt, setCutoffAt] = useState<string | null>(null);
+  const [products, setProducts] = useState<ProductRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
@@ -96,21 +94,16 @@ export default function NewArrivalPage() {
       setError(null);
 
       try {
-        const [productsResponse, settingsResponse] = await Promise.all([
-          fetch(`/api/products?active=true`, { signal: controller.signal }),
-          fetch(`/api/site-settings/new-arrivals`, { signal: controller.signal }),
-        ]);
+        const response = await fetch(`/api/products?active=true`, { signal: controller.signal });
 
-        if (!productsResponse.ok) {
+        if (!response.ok) {
           throw new Error("Failed to load products");
         }
 
-        const productsPayload = (await productsResponse.json()) as { data?: { products?: Product[] } };
-        const settingsPayload = (await settingsResponse.json().catch(() => null)) as SiteSettingResponse | null;
+        const payload = (await response.json()) as { data?: { products?: ProductRecord[] } };
 
         if (!controller.signal.aborted) {
-          setProducts(productsPayload.data?.products ?? []);
-          setCutoffAt(settingsPayload?.data?.cutoffAt ?? null);
+          setProducts(payload.data?.products ?? []);
         }
       } catch (fetchError) {
         if (!controller.signal.aborted) {
@@ -129,9 +122,8 @@ export default function NewArrivalPage() {
   }, []);
 
   const visibleProducts = useMemo(() => {
-    const cutoffTimestamp = cutoffAt ? new Date(cutoffAt).getTime() : null;
     const filtered = products.filter((product) => {
-      if (cutoffTimestamp && getProductDate(product) < cutoffTimestamp) {
+      if (product.isNewArrival !== true) {
         return false;
       }
 
@@ -151,7 +143,7 @@ export default function NewArrivalPage() {
     }
 
     return [...filtered].sort((left, right) => getProductDate(right) - getProductDate(left));
-  }, [cutoffAt, products, selectedFilter, sortBy]);
+  }, [products, selectedFilter, sortBy]);
 
   return (
     <div className="min-h-screen w-full overflow-x-hidden bg-white" style={{ fontFamily: FONT_HEADING }}>
@@ -160,9 +152,7 @@ export default function NewArrivalPage() {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#8f836f]">New Arrivals</p>
             <h1 className="mt-2 text-3xl font-extrabold text-[#293A55] sm:text-4xl">Freshly added picks</h1>
-            <p className="mt-2 text-sm text-[#6e6454]">
-              {cutoffAt ? `Showing products added since ${new Date(cutoffAt).toLocaleDateString()}.` : "Showing all active products until the cutoff is set from admin."}
-            </p>
+            <p className="mt-2 text-sm text-[#6e6454]">Showing only the products selected by admin as new arrivals.</p>
           </div>
 
           <div className="relative">
@@ -249,7 +239,7 @@ export default function NewArrivalPage() {
         ) : visibleProducts.length === 0 ? (
           <div className="rounded-[2rem] border border-dashed border-[#d9c8ae] bg-white px-6 py-14 text-center shadow-[0_16px_40px_rgba(0,0,0,0.04)]">
             <h2 className="text-2xl font-extrabold text-[#293A55]">No new arrivals yet</h2>
-            <p className="mt-2 text-sm text-[#6e6454]">New products will appear here after the admin resets the cutoff date.</p>
+            <p className="mt-2 text-sm text-[#6e6454]">Products marked as new arrivals in the admin panel will appear here.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 sm:gap-x-8 sm:gap-y-12">

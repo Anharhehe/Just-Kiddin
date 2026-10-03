@@ -1,12 +1,28 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronDown, Heart } from "lucide-react";
-import { products as demoProducts, type Product } from "../../data/demo";
 import { useFavourites } from "../../hooks/useFavourites";
 import { getProductImage } from "../../utils/product-image";
+
+type ProductRecord = {
+  id: string;
+  name: string;
+  category: string | null;
+  ageGroup: "newborn" | "toddler" | "accessories";
+  gender: "boy" | "girl" | "unisex" | null;
+  tags: string[];
+  price: number;
+  discountPercent?: number;
+  image?: string | string[];
+  images?: Array<{ url?: string; path?: string; altText?: string | null }>; 
+  inStock: boolean;
+  reviews?: Array<{ rating?: number }>;
+  isFeatured?: boolean;
+  createdAt?: string | Date;
+};
 
 interface HeroProps {
   onSelectNewborns: () => void;
@@ -243,30 +259,68 @@ function GiftIcon({ color }: { color: string }) {
 
 /* --------------------------- Featured products grid --------------------------- */
 
-const FEATURED_PRODUCT_IDS = [
-  "newborn-boy-sleepsuits-1",
-  "newborn-boy-sleepsuits-2",
-  "newborn-boy-sleepsuits-3",
-  "newborn-boy-sleepsuits-4",
-  "toddler-boy-hoodies-1",
-  "toddler-boy-hoodies-2",
-  "toddler-boy-hoodies-3",
-  "toddler-boy-hoodies-4",
-] as const;
+function compareAtPrice(price: number, discountPercent?: number) {
+  const dp = Math.max(0, Math.min(100, Number(discountPercent || 0)));
+  if (dp <= 0) return price;
+  return Math.round(price / (1 - dp / 100));
+}
 
-type FeaturedProduct = Product & { image: string | string[] };
+function averageRating(product: ProductRecord) {
+  const reviews: Array<{ rating?: number }> = product.reviews ?? [];
+  if (!Array.isArray(reviews) || reviews.length === 0) return { avg: 0, count: 0 };
+  const sum = reviews.reduce((total, review) => total + (review?.rating || 0), 0);
+  return { avg: sum / reviews.length, count: reviews.length };
+}
 
 function FeaturedProducts() {
+  const [featuredProducts, setFeaturedProducts] = useState<ProductRecord[]>([]);
   const [showMore, setShowMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { favouriteIds, toggle: toggleFav } = useFavourites();
 
-  const featuredProducts = useMemo(() => {
-    return FEATURED_PRODUCT_IDS.map((id) => demoProducts.find((product) => product.id === id)).filter(
-      (product): product is FeaturedProduct => Boolean(product)
-    );
+  useEffect(() => {
+    let active = true;
+
+    async function loadFeaturedProducts() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await fetch(`/api/products?active=true&featured=true`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load featured products");
+        }
+
+        const payload = (await response.json()) as { data?: { products?: ProductRecord[] } };
+        const products = (payload.data?.products ?? []).filter((product) => product.isFeatured !== false).slice(0, 12);
+
+        if (active) {
+          setFeaturedProducts(products);
+        }
+      } catch (fetchError) {
+        if (active) {
+          setError(fetchError instanceof Error ? fetchError.message : "Failed to load featured products");
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadFeaturedProducts();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const visibleProducts = showMore ? featuredProducts : featuredProducts.slice(0, 4);
+  const showToggle = featuredProducts.length > 4;
 
   return (
     <div className="relative z-10 mx-auto max-w-7xl px-4 pb-16 pt-8 sm:px-6 lg:px-8">
@@ -285,77 +339,110 @@ function FeaturedProducts() {
         </p>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {visibleProducts.map((product) => {
-          const liked = favouriteIds.has(product.id);
-          const imageSrc = getProductImage(product);
-          const ageSegment = product.ageGroup === "newborn" ? "newborns" : "toddlers";
-          const genderSegment = product.gender === "boy" ? "boys" : product.gender === "girl" ? "girls" : "accessories";
-          const categorySlug = product.tags.find((tag) => tag !== product.ageGroup && tag !== product.gender) ?? (product.category ?? "accessories").toLowerCase().replace(/\s+/g, "-");
+      {loading ? (
+        <div className="mt-8 text-sm text-[#6e6454]">Loading featured products...</div>
+      ) : error ? (
+        <div className="mt-8 text-sm text-[#b91c1c]">{error}</div>
+      ) : featuredProducts.length === 0 ? (
+        <div className="mt-8 rounded-[2rem] border border-dashed border-[#d9c8ae] bg-white px-6 py-14 text-center shadow-[0_16px_40px_rgba(0,0,0,0.04)]">
+          <h3 className="text-2xl font-extrabold text-[#293A55]">No featured products selected</h3>
+          <p className="mt-2 text-sm text-[#6e6454]">Mark products as featured in the admin panel to populate this section.</p>
+        </div>
+      ) : (
+        <>
+          <div className="mt-8 grid grid-cols-2 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {visibleProducts.map((product) => {
+              const liked = favouriteIds.has(product.id);
+              const imageSrc = getProductImage(product as any);
+              const ageSegment = product.ageGroup === "newborn" ? "newborns" : "toddlers";
+              const genderSegment = product.gender === "boy" ? "boys" : product.gender === "girl" ? "girls" : "accessories";
+              const categorySlug = product.tags.find((tag) => tag !== product.ageGroup && tag !== product.gender) ?? (product.category ?? "accessories").toLowerCase().replace(/\s+/g, "-");
+              const rating = averageRating(product);
+              const comparePrice = compareAtPrice(product.price, product.discountPercent);
 
-          return (
-            <Link
-              key={product.id}
-              href={`/${ageSegment}/${genderSegment}/${categorySlug}/${product.id}`}
-              className="group block cursor-pointer"
-            >
-              <article className="overflow-hidden rounded-2xl border border-[#E6D9C4] bg-[#FCF5EE] shadow-[0_10px_28px_rgba(41,58,85,0.08)] transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_34px_rgba(41,58,85,0.14)]">
-                <div className="relative aspect-square overflow-hidden">
-                  <Image
-                    src={imageSrc}
-                    alt={product.name}
-                    fill
-                    className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                  />
+              return (
+                <Link
+                  key={product.id}
+                  href={`/products/${encodeURIComponent(product.id)}`}
+                  className="group block cursor-pointer"
+                >
+                  <article className="overflow-hidden rounded-2xl border border-[#E6D9C4] bg-[#FCF5EE] shadow-[0_10px_28px_rgba(41,58,85,0.08)] transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_16px_34px_rgba(41,58,85,0.14)]">
+                    <div className="relative aspect-square overflow-hidden">
+                      <Image
+                        src={imageSrc}
+                        alt={product.name}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      />
 
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void toggleFav(product);
-                    }}
-                    className="absolute right-3 top-3 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white shadow-sm transition-transform hover:scale-105"
-                    aria-label="Add to wishlist"
-                  >
-                    <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : "text-[#293A55]"}`} />
-                  </button>
+                      {product.discountPercent ? (
+                        <div className="absolute left-3 top-3 rounded-full bg-[#E8735F] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                          {product.discountPercent}% OFF
+                        </div>
+                      ) : null}
 
-                  {!product.inStock && (
-                    <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
-                      Out of stock
-                    </span>
-                  )}
-                </div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void toggleFav(product as any);
+                        }}
+                        className="absolute right-3 top-3 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full bg-white shadow-sm transition-transform hover:scale-105"
+                        aria-label="Add to wishlist"
+                      >
+                        <Heart className={`h-4 w-4 ${liked ? "fill-red-500 text-red-500" : "text-[#293A55]"}`} />
+                      </button>
 
-                <div className="p-4 text-left">
-                  <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#7FA08D]">
-                    {product.ageGroup === "newborn" ? "Newborn" : "Toddler"}
-                  </p>
-                  <h3 className="mt-1 text-base font-bold leading-tight text-[#293A55] sm:text-lg">
-                    {product.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-[#5c5445]">{product.category}</p>
-                  <p className="mt-3 text-base font-semibold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
-                </div>
-              </article>
-            </Link>
-          );
-        })}
-      </div>
+                      {!product.inStock && (
+                        <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white">
+                          Out of stock
+                        </span>
+                      )}
+                    </div>
 
-      <div className="mt-10 flex justify-center">
-        <button
-          type="button"
-          onClick={() => setShowMore((value) => !value)}
-          className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-sm font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:text-base"
-          style={{ background: "#E8735F" }}
-        >
-          {showMore ? "Show Less" : "View Toddler Deals"}
-          <ChevronDown className={`h-4 w-4 transition-transform ${showMore ? "rotate-180" : ""}`} />
-        </button>
-      </div>
+                    <div className="p-4 text-left">
+                      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#7FA08D]">
+                        {product.ageGroup === "newborn" ? "Newborn" : "Toddler"}
+                      </p>
+                      <h3 className="mt-1 text-base font-bold leading-tight text-[#293A55] sm:text-lg">
+                        {product.name}
+                      </h3>
+                      <p className="mt-1 text-sm text-[#5c5445]">{product.category}</p>
+
+                      <div className="mt-3 flex items-center gap-2 text-sm text-[#5c5445]">
+                        <span className="flex items-center gap-1">
+                          <span className="text-yellow-500">★</span>
+                          <span className="font-semibold">{Number(rating.avg).toFixed(1)}</span>
+                        </span>
+                        <span className="text-[#7A6F5D]">({rating.count})</span>
+                      </div>
+
+                      <p className="mt-2 text-base font-semibold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
+                      <p className="text-sm text-[#9a8f7f] line-through">PKR {comparePrice.toLocaleString()}</p>
+                    </div>
+                  </article>
+                </Link>
+              );
+            })}
+          </div>
+
+          {showToggle ? (
+            <div className="mt-10 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowMore((value) => !value)}
+                className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-sm font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:text-base"
+                style={{ background: "#E8735F" }}
+              >
+                {showMore ? "Show Less" : "View More"}
+                <ChevronDown className={`h-4 w-4 transition-transform ${showMore ? "rotate-180" : ""}`} />
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

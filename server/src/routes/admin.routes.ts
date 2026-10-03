@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import { deleteAdminContactQuery, deleteAdminReview, createAdminReview, getAdminContactQueries, getAdminCustomerByEmail, getAdminCustomers, getAdminOrders, getAdminOverview, getAdminReviews, markAdminContactQueryAsRead, updateAdminOrderStatus, updateAdminReview } from "../controllers/admin.controller";
 import {
+  bulkUpdateProducts,
   createProduct,
   deleteProduct,
   deleteProductImage,
@@ -22,6 +23,7 @@ adminRouter.get("/overview", asyncHandler(getAdminOverview));
 adminRouter.get("/queries", asyncHandler(getAdminContactQueries));
 adminRouter.get("/products", asyncHandler(getProducts));
 adminRouter.post("/products", asyncHandler(createProduct));
+adminRouter.patch("/products/bulk", asyncHandler(bulkUpdateProducts));
 adminRouter.patch("/products/:productId", asyncHandler(updateProduct));
 adminRouter.delete("/products/:productId", asyncHandler(deleteProduct));
 adminRouter.post("/products/:productId/images", asyncHandler(uploadProductImage));
