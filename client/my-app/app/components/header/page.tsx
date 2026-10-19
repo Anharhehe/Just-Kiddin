@@ -140,10 +140,10 @@ export default function Header() {
       className="sticky top-0 z-50 w-full"
       style={{ background: heroBg }}
     >
-      <div className="w-full px-3 sm:px-6 md:px-10 lg:px-16 xl:px-[1in] transition-colors duration-300">
+      <div className="w-full px-3 sm:px-6 md:px-10 lg:pl-16 lg:pr-24 xl:pl-[1in] xl:pr-28 2xl:px-[1in] transition-colors duration-300">
 
         {/* ── Mobile Row (logo / icons / hamburger) ────────────────── */}
-        <div className="flex md:hidden items-center justify-between h-26 sm:h-20 gap-2">
+        <div className="flex xl:hidden items-center justify-between h-26 sm:h-20 gap-2">
           {/* Left: logo */}
           <Link href="/" className="flex-shrink-0 min-w-0">
             <Image
@@ -196,7 +196,7 @@ export default function Header() {
         </div>
 
         {/* ── Desktop Row (unchanged) ────────────────────────────────── */}
-        <div className="hidden md:flex h-26 items-center justify-between gap-6">
+        <div className="hidden xl:flex h-26 items-center justify-between gap-6">
 
           {/* ── Logo ───────────────────────────────────────────────── */}
           <Link href="/" className="flex-shrink-0 min-w-0">
@@ -205,13 +205,13 @@ export default function Header() {
               alt="Just Kidin' Logo"
               width={190}
               height={76}
-              className="w-[150px] md:w-[176px] h-auto object-contain"
+              className="w-[150px] md:w-[160px] 2xl:w-[176px] h-auto object-contain"
               priority
             />
           </Link>
 
           {/* ── Desktop Nav ────────────────────────────────────────────── */}
-          <nav className="flex items-center gap-5 lg:gap-7 flex-shrink-0">
+          <nav className="flex items-center gap-4 2xl:gap-7 flex-shrink-0">
             {navLinks.map((link) => (
               <NavLink key={link.href} href={link.href} label={link.label} />
             ))}
@@ -249,7 +249,7 @@ export default function Header() {
 
       {/* ── Mobile Menu ────────────────────────────────────────────── */}
       <div
-        className={`md:hidden overflow-hidden transition-all duration-300 ${
+        className={`xl:hidden overflow-hidden transition-all duration-300 ${
           mobileOpen ? "max-h-screen opacity-100" : "max-h-0 opacity-0"
         }`}
         style={{
