@@ -1,6 +1,7 @@
 import { Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
+import type { AuthenticatedRequest } from "../middleware/auth.middleware";
 
 const reviewSchema = z.object({
   productId: z.string().trim().min(1).optional().or(z.literal("")),
@@ -55,7 +56,7 @@ export async function getReviews(req: { query: { limit?: string; skip?: string; 
   }
 }
 
-export async function createReview(req: { body: unknown }, res: Response) {
+export async function createReview(req: AuthenticatedRequest, res: Response) {
   const parsed = reviewSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -66,8 +67,23 @@ export async function createReview(req: { body: unknown }, res: Response) {
     });
   }
 
+  if (!req.user?.id) {
+    return res.status(401).json({
+      success: false,
+      message: "Sign in and place an order before leaving a review.",
+    });
+  }
+
   try {
     const productId = parsed.data.productId?.trim() || null;
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, fullName: true, email: true },
+    });
+
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Your account could not be verified." });
+    }
 
     if (productId) {
       const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
@@ -80,10 +96,43 @@ export async function createReview(req: { body: unknown }, res: Response) {
       }
     }
 
+    const matchingOrders = productId
+      ? await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT orders."id"
+          FROM "CustomerOrder" AS orders
+          WHERE orders."userId" = ${user.id}
+            AND EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(orders."itemsJson") = 'array' THEN orders."itemsJson"
+                  ELSE '[]'::jsonb
+                END
+              ) AS item
+              WHERE item->>'productId' = ${productId}
+            )
+          LIMIT 1
+        `
+      : await prisma.customerOrder.findMany({
+          where: { userId: user.id },
+          select: { id: true },
+          take: 1,
+        });
+
+    if (matchingOrders.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: productId
+          ? "Place an order for this product before you can leave a review."
+          : "Place an order before you can leave a review.",
+      });
+    }
+
     const review = await prisma.review.create({
       data: {
+        userId: user.id,
         productId,
-        name: parsed.data.name,
+        name: user.fullName?.trim() || user.email.split("@")[0],
         city: parsed.data.city,
         rating: parsed.data.rating,
         review: parsed.data.review,

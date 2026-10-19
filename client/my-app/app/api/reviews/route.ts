@@ -10,9 +10,16 @@ async function proxyRequest(request: Request, method: "GET" | "POST") {
   });
 
   try {
+    const headers = new Headers();
+    const cookie = request.headers.get("cookie");
+    if (cookie) headers.set("cookie", cookie);
+    if (method === "POST") {
+      headers.set("Content-Type", request.headers.get("content-type") ?? "application/json");
+    }
+
     const response = await fetch(upstreamUrl.toString(), {
       method,
-      headers: method === "POST" ? { "Content-Type": request.headers.get("content-type") ?? "application/json" } : undefined,
+      headers,
       body: method === "POST" ? await request.text() : undefined,
       cache: "no-store",
     });

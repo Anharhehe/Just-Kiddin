@@ -24,14 +24,14 @@ type Category = {
 const FONT_HEADING = "'Quicksand', sans-serif";
 
 const CATEGORIES: Category[] = [
-  { slug: "rompers", label: "Rompers", image: "/demo.png" },
-  { slug: "bodysuits", label: "Bodysuits", image: "/demo.png" },
-  { slug: "newborn-starter-sets", label: "Newborn Starter sets", image: "/demo.png" },
-  { slug: "thermals", label: "Thermals", image: "/demo.png" },
-  { slug: "gift-sets", label: "Gift sets", image: "/demo.png" },
-  { slug: "knitwears", label: "Knitwears", image: "/demo.png" },
-  { slug: "sets-suits", label: "Sets & suits", image: "/demo.png" },
-  { slug: "infant-essentials", label: "infant essentials", image: "/demo.png" },
+  { slug: "rompers", label: "Rompers", image: "/cat1.png" },
+  { slug: "bodysuits", label: "Bodysuits", image: "/cat1.png" },
+  { slug: "newborn-starter-sets", label: "Newborn Starter sets", image: "/cat2.png" },
+  { slug: "thermals", label: "Thermals", image: "cat3.png" },
+  { slug: "gift-sets", label: "Gift sets", image: "/cat4.png" },
+  { slug: "knitwears", label: "Knitwears", image: "/cat5.png" },
+  { slug: "sets-suits", label: "Sets & suits", image: "/cat6.png" },
+  { slug: "infant-essentials", label: "infant essentials", image: "/cat7.png" },
 ];
 
 // Tight, consistent page gutter reused across every section
@@ -136,7 +136,7 @@ export default function NewbornsPage() {
                   className="flex shrink-0 cursor-pointer flex-col items-center gap-3"
                 >
                   <span
-                    className={`flex h-20 w-20 overflow-hidden rounded-full border-2 bg-white shadow-[0_12px_26px_rgba(41,58,85,0.12)] transition-all ${
+                    className={`flex h-24 w-24 overflow-hidden rounded-full border-2 bg-white shadow-[0_12px_26px_rgba(41,58,85,0.12)] transition-all ${
                       active ? "border-[#293A55] ring-2 ring-[#293A55]/20 ring-offset-2" : "border-[#efe0cf]"
                     }`}
                   >
@@ -179,7 +179,7 @@ export default function NewbornsPage() {
                       : "border-[#e6ddcd] bg-white text-[#5c5445]"
                   }`}
                 >
-                  <span className="flex h-7 w-7 shrink-0 overflow-hidden rounded-full bg-[#F3E9DC]">
+                  <span className="flex h-8 w-8 shrink-0 overflow-hidden rounded-full bg-[#F3E9DC]">
                     <img src={cat.image} alt="" className="h-full w-full object-cover" />
                   </span>
                   {cat.label}

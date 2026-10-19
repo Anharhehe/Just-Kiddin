@@ -58,3 +58,33 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     });
   }
 }
+
+export function optionalAuth(req: AuthenticatedRequest, _res: Response, next: NextFunction) {
+  const bearer = req.headers.authorization?.startsWith("Bearer ")
+    ? req.headers.authorization.slice(7)
+    : undefined;
+  const cookieToken = req.cookies?.jk_access_token as string | undefined;
+  const token = bearer ?? cookieToken;
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET) as {
+      sub: string;
+      email: string;
+      role: "USER" | "ADMIN";
+    };
+
+    req.user = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role
+    };
+  } catch (_error) {
+    // Invalid sessions continue as guest; authenticated-only actions still reject them.
+  }
+
+  return next();
+}

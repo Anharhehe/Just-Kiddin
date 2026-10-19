@@ -13,6 +13,11 @@ type AudienceContextValue = {
 const AudienceContext = createContext<AudienceContextValue | undefined>(undefined);
 
 const STORAGE_KEY = "jk-audience";
+const INITIAL_CLIENT_PATHNAME = typeof window === "undefined" ? null : window.location.pathname;
+
+export function wasInitiallyLoadedAtHome() {
+  return INITIAL_CLIENT_PATHNAME === "/";
+}
 
 export function AudienceProvider({ children }: { children: React.ReactNode }) {
   const [audience, setAudienceState] = useState<Audience | null>(null);

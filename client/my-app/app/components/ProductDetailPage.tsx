@@ -171,6 +171,7 @@ export default function ProductDetailPage({
   const [showSizeChart, setShowSizeChart] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewNotice, setReviewNotice] = useState<string | null>(null);
+  const [reviewNoticeIsError, setReviewNoticeIsError] = useState(false);
   const { favouriteIds, toggle: toggleFav } = useFavourites();
   const { addItem } = useCart();
   const favourited = favouriteIds.has(product.id);
@@ -195,7 +196,7 @@ export default function ProductDetailPage({
     const deliveryDate = new Date(today);
 
     dispatchDate.setDate(today.getDate());
-    deliveryDate.setDate(today.getDate() + 3);
+    deliveryDate.setDate(today.getDate() + 5);
 
     return {
       deliveryLabel: formatter.format(deliveryDate),
@@ -371,6 +372,7 @@ export default function ProductDetailPage({
   const handleReviewSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setReviewNotice(null);
+    setReviewNoticeIsError(false);
     setSubmittingReview(true);
 
     try {
@@ -399,8 +401,10 @@ export default function ProductDetailPage({
       setReviews((current) => [payload.data as ProductReview, ...current]);
       setReviewForm({ name: "", city: "", rating: 5, review: "" });
       setReviewNotice("Review submitted successfully.");
+      setReviewNoticeIsError(false);
     } catch (error) {
       setReviewNotice(error instanceof Error ? error.message : "Failed to submit review");
+      setReviewNoticeIsError(true);
     } finally {
       setSubmittingReview(false);
     }
@@ -522,7 +526,7 @@ export default function ProductDetailPage({
                 />
               </label>
 
-              {reviewNotice ? <p className="text-sm font-medium text-[#7FA08D]">{reviewNotice}</p> : null}
+              {reviewNotice ? <p className={`text-sm font-medium ${reviewNoticeIsError ? "text-rose-600" : "text-[#7FA08D]"}`} role={reviewNoticeIsError ? "alert" : "status"}>{reviewNotice}</p> : null}
 
               <button
                 type="submit"
@@ -578,7 +582,7 @@ export default function ProductDetailPage({
     <div className="min-h-screen bg-[0000]" style={{ fontFamily: FONT_BODY }}>
 
       {/* Breadcrumb — plain text, not clickable */}
-      <div className="px-6 pt-5 pb-3 text-xs text-[#9a8f7f] sm:px-[1in]">
+      <div className="px-6 pt-5 pb-3 text-xs text-[#9a8f7f] sm:px-6 lg:px-8 2xl:px-[1in]">
         <span>Home</span>
         <span className="mx-1.5">›</span>
         <span>{grandParentLabel}</span>
@@ -590,17 +594,17 @@ export default function ProductDetailPage({
         <span className="font-medium text-[#3d372c]">{product.name}</span>
       </div>
 
-      <div className="px-6 pb-12 sm:px-[1in]">
-        {/* FIX #2: lg:items-start instead of lg:items-stretch so the image column
+      <div className="px-6 pb-12 sm:px-6 lg:px-8 2xl:px-[1in]">
+        {/* FIX #2: xl:items-start instead of xl:items-stretch so the image column
             no longer stretches/distorts to match the height of the details column
             when the description or table gets long. */}
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-10 xl:flex-row xl:items-start">
 
           {/* Image gallery — main image on top (smaller, zoom-on-hover), thumbnails below, arrows on all breakpoints */}
-          {/* FIX #2: added lg:sticky lg:top-6 so it holds its own place instead of
+            {/* FIX #2: added xl:sticky xl:top-6 so it holds its own place instead of
               growing with the rest of the page, and dropped the lg:aspect-auto /
               lg:min-h-[535px] override that let its height get overridden. */}
-          <div className="flex w-full max-w-md lg:max-w-[461px] flex-col gap-3 lg:sticky lg:top-6 lg:shrink-0 lg:self-start">
+            <div className="flex w-full max-w-md xl:max-w-[461px] flex-col gap-3 xl:sticky xl:top-6 xl:shrink-0 xl:self-start">
             {/* Main image */}
             <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-[#EFE9DF] shadow-[0_12px_32px_rgba(41,58,85,0.10)]">
               <Image
@@ -666,7 +670,7 @@ export default function ProductDetailPage({
           </div>
 
           {/* Details — more compact */}
-          <div className="grid w-full gap-5 lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
+          <div className="grid w-full gap-5 xl:grid-cols-[minmax(0,1fr)_19rem] xl:items-start">
             <div className="flex w-full flex-col justify-center gap-3.5">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#7FA08D]" style={{ fontFamily: FONT_HEADING }}>
@@ -716,7 +720,7 @@ export default function ProductDetailPage({
                 <section className="rounded-xl border border-[#ead9c1] bg-[#FCF5EE] p-3">
                   <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#7FA08D]">Key specifications</p>
 
-                  <div className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+                  <div className="mt-2 grid gap-x-4 gap-y-1.5 2xl:grid-cols-2">
                     {(() => {
                       const HEADINGS = ["Product type", "Style", "Season", "Packaging", "Fabric"];
 
@@ -834,7 +838,7 @@ export default function ProductDetailPage({
               </div>
             </div>
           </div>
-            <div className="mx-auto w-full max-w-xs lg:sticky lg:top-6">
+            <div className="mx-auto w-full max-w-xs xl:sticky xl:top-6">
               <aside className="rounded-[1.5rem] border border-[#E8DDCC] bg-[#FCF5EE] p-4 shadow-[0_10px_28px_rgba(41,58,85,0.06)]">
                 <div className="space-y-3">
                   <div className="rounded-2xl bg-white px-4 py-4 shadow-sm">
@@ -858,7 +862,7 @@ export default function ProductDetailPage({
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#E8735F]">Expected delivery</p>
                         <p className="mt-1 text-sm font-semibold text-[#2F2A22]">{serviceInfo.deliveryLabel}</p>
-                        <p className="mt-1 text-xs text-[#7A6F5D]">Order today and receive it in about 3 days.</p>
+                        <p className="mt-1 text-xs text-[#7A6F5D]">Order today and receive it in about 5 days.</p>
                       </div>
                     </div>
                   </div>

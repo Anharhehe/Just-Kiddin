@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
+import { useEffect, useState } from "react";
+import Image, { getImageProps } from "next/image";
 import Link from "next/link";
 import { ChevronDown, Heart } from "lucide-react";
 import { useFavourites } from "../../hooks/useFavourites";
@@ -19,7 +19,7 @@ type ProductRecord = {
   originalPrice?: number | null;
   discountPercent?: number;
   image?: string | string[];
-  images?: Array<{ url?: string; path?: string; altText?: string | null }>; 
+  images?: Array<{ url?: string; path?: string; altText?: string | null }>;
   inStock: boolean;
   reviews?: Array<{ rating?: number }>;
   isFeatured?: boolean;
@@ -33,35 +33,79 @@ interface HeroProps {
 
 const FONT_HEADING = "'Quicksand', sans-serif";
 
+/* ------------------------ Hero background images ------------------------ */
+/* Put both files in /public:
+   - /main.png          -> desktop / tablet (wide, at least 2560px wide)
+   - /main2.png   -> mobile (portrait, at least 1080px wide, e.g. 1080x1600)
+*/
+const DESKTOP_IMAGE = "/main.png";
+const MOBILE_IMAGE = "/main2.png";
+
+// Real pixel size of main2.png. Only used to reserve the right amount of space
+// before the image loads (set these to the actual dimensions of your file).
+const MOBILE_IMAGE_WIDTH = 1080;
+const MOBILE_IMAGE_HEIGHT = 1920;
+
+function HeroBackground() {
+  // Art direction: the browser only downloads ONE of these (via <picture>),
+  // so mobile never loads the big desktop image and vice versa.
+
+  // Desktop (unchanged): fills the hero band and is cropped with object-cover.
+  const {
+    props: { srcSet: desktopSrcSet },
+  } = getImageProps({
+    alt: "Hero background",
+    fill: true,
+    priority: true,
+    quality: 100,
+    src: DESKTOP_IMAGE,
+    sizes: "100vw",
+  });
+
+  // Mobile: NOT cropped. The image keeps its natural shape at full width, so the
+  // whole picture (sky + kids) is visible and the hero band grows to fit it.
+  const { props: mobileProps } = getImageProps({
+    alt: "Hero background",
+    width: MOBILE_IMAGE_WIDTH,
+    height: MOBILE_IMAGE_HEIGHT,
+    priority: true,
+    quality: 100,
+    src: MOBILE_IMAGE,
+    sizes: "100vw",
+  });
+
+  return (
+    <picture>
+      {/* sm (640px) and up -> desktop image */}
+      <source media="(min-width: 640px)" srcSet={desktopSrcSet} />
+      {/* below 640px -> mobile image (fallback <img>) */}
+      {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}
+      <img
+        {...mobileProps}
+        className="block h-auto w-full sm:absolute sm:inset-0 sm:h-full sm:object-cover"
+      />
+    </picture>
+  );
+}
+
 export default function Hero({ onSelectNewborns, onSelectToddlers }: HeroProps) {
   return (
     <section className="relative w-full overflow-x-hidden" style={{ fontFamily: FONT_HEADING }}>
-      {/* Background photo band - 65vh on mobile, original 92vh on desktop */}
-      <div className="relative flex min-h-[65vh] w-full flex-col justify-center sm:min-h-[92vh]">
-        {/* Mobile background */}
-        <Image
-          src="/hero2.png"
-          alt="Hero background"
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover sm:hidden"
-        />
-        {/* Desktop background - unchanged */}
-        <Image
-          src="/hero.png"
-          alt="Hero background"
-          fill
-          priority
-          sizes="100vw"
-          className="hidden object-cover sm:block"
-        />
-        {/* soft overlay so text/buttons stay legible over the photo */}
-        <div className="absolute inset-0 bg-white/40" />
+      {/* Background photo band: 65vh on mobile, 92vh on desktop */}
+      <div className="relative flex w-full flex-col justify-center overflow-hidden sm:min-h-[92vh]">
+        {/* Background image (different file for mobile and desktop) */}
+        <div className="relative sm:absolute sm:inset-0">
+          <HeroBackground />
+        </div>
+
+        {/* light overlay so text/buttons stay legible without washing the photo out */}
+        <div className="absolute inset-0 bg-white/20" style={{ marginTop: "1000px"}} />
 
         {/* Logo + heading + buttons, layered on top of the photo */}
-        <div className="relative z-10">
-          <div className="mx-auto flex max-w-7xl justify-end px-6 pt-6 sm:px-10 sm:pt-8">
+        {/* mobile: sits over the empty sky (top half of the image), centered.
+            desktop: same as before (normal flow, 100px offset) */}
+        <div className="absolute inset-x-0 top-0 z-10 flex h-1/2 flex-col justify-center sm:relative sm:inset-auto sm:mt-[100px] sm:block sm:h-auto">
+          <div className="mx-auto hidden max-w-7xl justify-end px-6 pt-6 sm:flex sm:px-10 sm:pt-8">
             <Wordmark />
           </div>
           <HeroBody onSelectNewborns={onSelectNewborns} onSelectToddlers={onSelectToddlers} />
@@ -96,14 +140,13 @@ function HeroBody({ onSelectNewborns, onSelectToddlers }: HeroProps) {
 
   return (
     <div
-      className="relative z-10 mx-auto flex max-w-2xl flex-col items-center px-6 pb-6 pt-8 text-center sm:px-10 sm:pt-10"
+      className="relative z-10 mx-auto w-full max-w-7xl px-6 pb-0 pt-0 sm:px-10 sm:pb-6 sm:pt-10"
       style={body}
     >
-      {/* mobile: no offset, content centers naturally in the 65vh band */}
-      {/* desktop: original -mt-40 restored, same as before */}
-      <div className="mx-auto flex w-full flex-col items-center sm:-mt-40">
+      {/* Left-aligned content block: heading, description, buttons */}
+      <div className="flex w-full max-w-xl flex-col items-center text-center sm:-mt-40 sm:items-start sm:text-left">
         <h2
-          className="text-[8vw] font-extrabold leading-[1.15] xs:text-[7.5vw] sm:text-5xl lg:text-6xl"
+          className="text-[8vw] font-extrabold leading-[1.1] tracking-tight xs:text-[7.5vw] sm:text-5xl lg:text-6xl"
           style={{ ...display, color: "#293A55" }}
         >
           <span className="block whitespace-nowrap">
@@ -117,30 +160,33 @@ function HeroBody({ onSelectNewborns, onSelectToddlers }: HeroProps) {
           </span>
         </h2>
 
-        <p className="mt-4 max-w-md text-base text-[#6B7280] sm:text-lg" style={body}>
+        <p
+          className="mx-auto mt-4 max-w-md text-base leading-relaxed text-[#293A55] sm:mx-0 sm:mt-6 sm:text-lg"
+          style={body}
+        >
           Thoughtfully made clothing for newborns to 5 years, for every little moment.
         </p>
 
-        {/* buttons: bigger on mobile, original size restored from sm: up */}
-        <div className="mt-7 flex flex-wrap justify-center gap-4 sm:gap-3">
+        {/* Buttons: side by side, left-aligned, equal width */}
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:mt-10 sm:flex-row sm:flex-wrap sm:justify-start sm:gap-4">
           <button
             type="button"
             onClick={onSelectNewborns}
-            className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-base font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:px-6 sm:py-3.5 sm:text-base"
+            className="flex min-w-[10.5rem] cursor-pointer items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-md transition-transform hover:scale-105 sm:min-w-[12rem] sm:px-8 sm:py-4 sm:text-base"
             style={{ background: "#E8735F", ...body }}
           >
             Shop Newborns
-            <ArrowIcon className="h-5 w-5 sm:h-4 sm:w-4" />
+            <ArrowIcon className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
 
           <button
             type="button"
             onClick={onSelectToddlers}
-            className="flex cursor-pointer items-center gap-2 rounded-full px-8 py-4 text-base font-bold uppercase tracking-wide text-white transition-transform hover:scale-105 sm:px-6 sm:py-3.5 sm:text-base"
+            className="flex min-w-[10.5rem] cursor-pointer items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-md transition-transform hover:scale-105 sm:min-w-[12rem] sm:px-8 sm:py-4 sm:text-base"
             style={{ background: "#7FA08D", ...body }}
           >
             Shop Toddlers
-            <ArrowIcon className="h-5 w-5 sm:h-4 sm:w-4" />
+            <ArrowIcon className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
         </div>
       </div>
@@ -207,7 +253,7 @@ function FeatureStrip() {
         style={{ background: "#FCF5EE" }}
       >
         {FEATURES.map((f) => (
-          <div key={f.label} className="flex items-center gap-3 py-4 sm:gap-4 sm:py-6 sm:px-6">
+          <div key={f.label} className="flex items-center gap-3 py-4 sm:gap-4 sm:px-6 sm:py-6">
             <span
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full sm:h-16 sm:w-16"
               style={{ background: f.bg, color: f.fg }}
@@ -292,7 +338,9 @@ function FeaturedProducts() {
         }
 
         const payload = (await response.json()) as { data?: { products?: ProductRecord[] } };
-        const products = (payload.data?.products ?? []).filter((product) => product.isFeatured !== false).slice(0, 12);
+        const products = (payload.data?.products ?? [])
+          .filter((product) => product.isFeatured !== false)
+          .slice(0, 12);
 
         if (active) {
           setFeaturedProducts(products);
@@ -342,7 +390,9 @@ function FeaturedProducts() {
       ) : featuredProducts.length === 0 ? (
         <div className="mt-8 rounded-[2rem] border border-dashed border-[#d9c8ae] bg-white px-6 py-14 text-center shadow-[0_16px_40px_rgba(0,0,0,0.04)]">
           <h3 className="text-2xl font-extrabold text-[#293A55]">No featured products selected</h3>
-          <p className="mt-2 text-sm text-[#6e6454]">Mark products as featured in the admin panel to populate this section.</p>
+          <p className="mt-2 text-sm text-[#6e6454]">
+            Mark products as featured in the admin panel to populate this section.
+          </p>
         </div>
       ) : (
         <>
@@ -350,9 +400,6 @@ function FeaturedProducts() {
             {visibleProducts.map((product) => {
               const liked = favouriteIds.has(product.id);
               const imageSrc = getProductImage(product as any);
-              const ageSegment = product.ageGroup === "newborn" ? "newborns" : "toddlers";
-              const genderSegment = product.gender === "boy" ? "boys" : product.gender === "girl" ? "girls" : "accessories";
-              const categorySlug = product.tags.find((tag) => tag !== product.ageGroup && tag !== product.gender) ?? (product.category ?? "accessories").toLowerCase().replace(/\s+/g, "-");
               const rating = averageRating(product);
               const comparePrice = getProductCutoffPrice(product);
 
@@ -415,8 +462,12 @@ function FeaturedProducts() {
                         <span className="text-[#7A6F5D]">({rating.count})</span>
                       </div>
 
-                      <p className="mt-2 text-base font-semibold text-[#E8735F]">PKR {product.price.toLocaleString()}</p>
-                      <p className="text-sm text-[#9a8f7f] line-through">PKR {comparePrice.toLocaleString()}</p>
+                      <p className="mt-2 text-base font-semibold text-[#E8735F]">
+                        PKR {product.price.toLocaleString()}
+                      </p>
+                      <p className="text-sm text-[#9a8f7f] line-through">
+                        PKR {comparePrice.toLocaleString()}
+                      </p>
                     </div>
                   </article>
                 </Link>
@@ -444,6 +495,7 @@ function FeaturedProducts() {
 }
 
 /* -------------------------------- Top Sellers ------------------------------ */
+/* Not rendered by default. Kept as-is in case you use it elsewhere. */
 
 interface TopSellerProduct {
   name: string;
@@ -509,10 +561,7 @@ function TopSellers() {
 function ProductCard({ product }: { product: TopSellerProduct }) {
   return (
     <div className="group flex flex-col overflow-hidden rounded-3xl bg-white shadow-[0_16px_40px_rgba(0,0,0,0.06)] transition-transform hover:-translate-y-1">
-      <div
-        className="relative aspect-square w-full overflow-hidden"
-        style={{ background: product.bg }}
-      >
+      <div className="relative aspect-square w-full overflow-hidden" style={{ background: product.bg }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`https://picsum.photos/seed/${product.seed}/500/500`}

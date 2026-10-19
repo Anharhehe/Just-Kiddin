@@ -27,7 +27,7 @@ const DELIVERY_CHARGE = 300;
 const FREE_DELIVERY_THRESHOLD = 3000;
 const FONT_HEADING = "'Quicksand', sans-serif";
 
-const PROMO_CODES = ["KIDIN10", "BABY10", "CUTE10", "MINI10", "SMART10", "FAMILY10", "LOVE10", "FIRST10", "SWEET10", "JUNIOR10"];
+const PROMO_CODES = ["JK05"];
 
 function formatCurrency(amount: number) {
 	return `PKR ${amount.toLocaleString()}`;
@@ -41,6 +41,12 @@ type ProductCard = {
 	images?: { url: string }[];
 	inStock: boolean;
 	ageGroup?: string;
+};
+
+type AccountProfile = {
+	id: string;
+	fullName: string | null;
+	email: string;
 };
 
 type FormState = {
@@ -62,6 +68,7 @@ function Field({
 	placeholder,
 	required = false,
 	type = "text",
+	readOnly = false,
 }: {
 	icon: React.ComponentType<{ className?: string }>;
 	label: string;
@@ -71,6 +78,7 @@ function Field({
 	placeholder: string;
 	required?: boolean;
 	type?: string;
+	readOnly?: boolean;
 }) {
 	return (
 		<label className="block">
@@ -84,7 +92,8 @@ function Field({
 					onChange={(event) => onChange(name, event.target.value)}
 					placeholder={placeholder}
 					required={required}
-					className="h-11 w-full rounded-xl border border-[#e3dccb] bg-white pl-10 pr-3 text-sm text-[#0F2540] outline-none transition-colors focus:border-[#ff7d6b]"
+					readOnly={readOnly}
+					className={`h-11 w-full rounded-xl border border-[#e3dccb] pl-10 pr-3 text-sm text-[#0F2540] outline-none transition-colors focus:border-[#ff7d6b] ${readOnly ? "cursor-not-allowed bg-[#f8f5ef]" : "bg-white"}`}
 				/>
 			</div>
 		</label>
@@ -103,10 +112,13 @@ export default function CheckoutPage() {
 		postalCode: "",
 		notes: "",
 	});
+	const [account, setAccount] = useState<AccountProfile | null>(null);
+	const [accountLoading, setAccountLoading] = useState(true);
 	const [promoInput, setPromoInput] = useState("");
 	const [appliedPromo, setAppliedPromo] = useState("");
 	const [promoMessage, setPromoMessage] = useState("");
 	const [promoError, setPromoError] = useState("");
+	const [checkingPromo, setCheckingPromo] = useState(false);
 	const [placingOrder, setPlacingOrder] = useState(false);
 	const [submitError, setSubmitError] = useState("");
 	const [accessoryProducts, setAccessoryProducts] = useState<ProductCard[]>([]);
@@ -124,6 +136,43 @@ export default function CheckoutPage() {
 		deliveryCharge === 0
 			? "Yahoo, you got free delivery!"
 			: `Add necessary accessories to get free delivery over ${formatCurrency(FREE_DELIVERY_THRESHOLD)}.`;
+
+	useEffect(() => {
+		let cancelled = false;
+
+		async function loadAccount() {
+			try {
+				const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+					method: "GET",
+					credentials: "include",
+				});
+				if (!response.ok) return;
+
+			const payload = (await response.json()) as {
+				success?: boolean;
+				data?: { user?: AccountProfile };
+			};
+			const user = payload.data?.user;
+			if (payload.success && user && !cancelled) {
+				setAccount(user);
+				setForm((current) => ({
+					...current,
+					fullName: user.fullName?.trim() || user.email.split("@")[0],
+					email: user.email,
+				}));
+			}
+		} catch (_error) {
+			// Guest checkout remains available without an account session.
+		} finally {
+			if (!cancelled) setAccountLoading(false);
+		}
+		}
+
+		void loadAccount();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -161,10 +210,15 @@ export default function CheckoutPage() {
 	}, []);
 
 	const updateField = (name: keyof FormState, value: string) => {
+		if (account && (name === "fullName" || name === "email")) return;
 		setForm((prev) => ({ ...prev, [name]: value }));
+		if (name === "email") {
+			setAppliedPromo("");
+			setPromoMessage("");
+		}
 	};
 
-	const handleApplyPromo = () => {
+	const handleApplyPromo = async () => {
 		const normalized = promoInput.trim().toUpperCase();
 		if (!normalized) {
 			setAppliedPromo("");
@@ -173,16 +227,48 @@ export default function CheckoutPage() {
 			return;
 		}
 
-		if (PROMO_CODES.includes(normalized)) {
-			setAppliedPromo(normalized);
-			setPromoMessage(`${normalized} applied. You saved 10% on subtotal.`);
-			setPromoError("");
+		if (!PROMO_CODES.includes(normalized)) {
+			setAppliedPromo("");
+			setPromoMessage("");
+			setPromoError("Invalid promo code.");
 			return;
 		}
 
-		setAppliedPromo("");
+		if (accountLoading) {
+			setAppliedPromo("");
+			setPromoMessage("");
+			setPromoError("Checking your account. Please try again in a moment.");
+			return;
+		}
+
+		if (!account) {
+			setAppliedPromo("");
+			setPromoMessage("");
+			setPromoError("Sign in to use JK05. This offer is for registered customers.");
+			return;
+		}
+
+		setCheckingPromo(true);
+		setPromoError("");
 		setPromoMessage("");
-		setPromoError("Invalid promo code.");
+		try {
+			const query = new URLSearchParams({ promoCode: normalized });
+			const response = await fetch(`${API_BASE_URL}/api/orders/validate-promo?${query.toString()}`, {
+				credentials: "include",
+			});
+			const payload = (await response.json().catch(() => null)) as { success?: boolean; message?: string } | null;
+			if (!response.ok || !payload?.success) {
+				throw new Error(payload?.message ?? "Could not validate promo code.");
+			}
+
+			setAppliedPromo(normalized);
+			setPromoMessage(`${normalized} applied. You saved 10% on subtotal.`);
+		} catch (error) {
+			setAppliedPromo("");
+			setPromoError(error instanceof Error ? error.message : "Could not validate promo code.");
+		} finally {
+			setCheckingPromo(false);
+		}
 	};
 
 	const handlePlaceOrder = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -201,6 +287,7 @@ export default function CheckoutPage() {
 		try {
 			const response = await fetch(`${API_BASE_URL}/api/orders`, {
 				method: "POST",
+				credentials: "include",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
 					customer: form,
@@ -308,9 +395,9 @@ export default function CheckoutPage() {
 					</div>
 
 					<div className="grid gap-4 sm:grid-cols-2">
-						<Field icon={User} label="Full Name" name="fullName" value={form.fullName} onChange={updateField} placeholder="Your full name" required />
+						<Field icon={User} label="Full Name" name="fullName" value={form.fullName} onChange={updateField} placeholder="Your full name" required readOnly={accountLoading || Boolean(account)} />
 						<Field icon={Phone} label="Mobile" name="mobile" value={form.mobile} onChange={updateField} placeholder="03XX XXXXXXX" required />
-						<Field icon={Mail} label="Email" name="email" value={form.email} onChange={updateField} placeholder="you@example.com" type="email" required />
+						<Field icon={Mail} label="Email" name="email" value={form.email} onChange={updateField} placeholder="you@example.com" type="email" required readOnly={accountLoading || Boolean(account)} />
 						<Field icon={MapPin} label="City" name="city" value={form.city} onChange={updateField} placeholder="Your city" required />
 					</div>
 
@@ -353,16 +440,18 @@ export default function CheckoutPage() {
 								<input
 									value={promoInput}
 									onChange={(event) => setPromoInput(event.target.value)}
-									placeholder="Enter promo code"
+									placeholder="JK05"
 									className="h-11 w-full rounded-xl border border-[#e3dccb] bg-white pl-10 pr-3 text-sm text-[#0F2540] outline-none transition-colors focus:border-[#ff7d6b]"
 								/>
 							</div>
 							<button
 								type="button"
 								onClick={handleApplyPromo}
-								className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0F2540] px-5 text-sm font-semibold text-white transition-transform duration-200 hover:scale-105"
+								disabled={checkingPromo}
+								className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0F2540] px-5 text-sm font-semibold text-white transition-transform duration-200 hover:scale-105 disabled:cursor-wait disabled:opacity-70"
 							>
-								Apply
+								{checkingPromo ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+								{checkingPromo ? "Checking" : "Apply"}
 							</button>
 						</div>
 						{promoMessage ? <p className="mt-3 text-sm text-emerald-600">{promoMessage}</p> : null}

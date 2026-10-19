@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import type { AuthenticatedRequest } from "../middleware/auth.middleware";
 
 const DELIVERY_CHARGE = 300;
-const PROMO_CODES = ["KIDIN10", "BABY10", "CUTE10", "MINI10", "SMART10", "FAMILY10", "LOVE10", "FIRST10", "SWEET10", "JUNIOR10"] as const;
+const PROMO_CODES = ["JK05"] as const;
 
 const orderItemSchema = z.object({
   cartItemId: z.string().min(1),
@@ -68,7 +68,45 @@ const createOrderSchema = z.object({
   promoCode: z.string().trim().max(20).optional().nullable().or(z.literal("")),
 });
 
-export async function createOrder(req: { body: unknown }, res: Response) {
+const validatePromoSchema = z.object({
+  promoCode: z.literal("JK05"),
+});
+
+export async function validatePromoCode(req: AuthenticatedRequest, res: Response) {
+  const parsed = validatePromoSchema.safeParse(req.query);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: parsed.error.issues[0]?.message ?? "Invalid promo request" });
+  }
+
+  if (!req.user?.id) {
+    return res.status(401).json({ success: false, message: "Sign in to use JK05." });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { id: true } });
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Your account could not be verified." });
+    }
+
+    const previousRedemption = await prisma.customerOrder.findFirst({
+      where: {
+        userId: user.id,
+        promoCode: "JK05",
+      },
+      select: { id: true },
+    });
+
+    if (previousRedemption) {
+      return res.status(409).json({ success: false, message: "JK05 has already been used on this account." });
+    }
+
+    return res.status(200).json({ success: true, message: "JK05 is available for your first order." });
+  } catch (_error) {
+    return res.status(500).json({ success: false, message: "Could not check promo eligibility." });
+  }
+}
+
+export async function createOrder(req: AuthenticatedRequest, res: Response) {
   const parsed = createOrderSchema.safeParse(req.body);
 
   if (!parsed.success) {
@@ -88,6 +126,29 @@ export async function createOrder(req: { body: unknown }, res: Response) {
       message: "Invalid promo code",
     });
   }
+
+  const accountUser = req.user?.id
+    ? await prisma.user.findUnique({
+        where: { id: req.user.id },
+        select: { id: true, fullName: true, email: true },
+      })
+    : null;
+
+  if (req.user?.id && !accountUser) {
+    return res.status(401).json({ success: false, message: "Your account could not be verified." });
+  }
+
+  if (hasPromo && !accountUser) {
+    return res.status(401).json({ success: false, message: "Sign in to use JK05." });
+  }
+
+  const customer = accountUser
+    ? {
+        ...parsed.data.customer,
+        fullName: accountUser.fullName?.trim() || accountUser.email.split("@")[0],
+        email: accountUser.email,
+      }
+    : parsed.data.customer;
 
   const subtotal = parsed.data.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -117,6 +178,20 @@ export async function createOrder(req: { body: unknown }, res: Response) {
 
   try {
     const [order] = await prisma.$transaction(async (tx) => {
+      if (hasPromo) {
+        const previousRedemption = await tx.customerOrder.findFirst({
+          where: {
+            userId: accountUser?.id,
+            promoCode: "JK05",
+          },
+          select: { id: true },
+        });
+
+        if (previousRedemption) {
+          throw new Error("JK05_ALREADY_USED");
+        }
+      }
+
       for (const [productId, quantity] of itemsByProduct.entries()) {
         const [product] = await tx.$queryRaw<Array<{
           id: string;
@@ -197,7 +272,6 @@ export async function createOrder(req: { body: unknown }, res: Response) {
 
       const [createdOrder] = await tx.$queryRaw<Array<{
       id: string;
-      fullName: string;
       email: string;
       mobile: string;
       address: string;
@@ -217,6 +291,7 @@ export async function createOrder(req: { body: unknown }, res: Response) {
     }>>`
       INSERT INTO "CustomerOrder" (
         "id",
+        "userId",
         "fullName",
         "email",
         "mobile",
@@ -237,8 +312,9 @@ export async function createOrder(req: { body: unknown }, res: Response) {
       )
       VALUES (
         ${orderId},
-        ${parsed.data.customer.fullName},
-        ${parsed.data.customer.email},
+        ${accountUser?.id ?? null},
+        ${customer.fullName},
+        ${customer.email},
         ${parsed.data.customer.mobile},
         ${parsed.data.customer.address},
         ${parsed.data.customer.city},
@@ -255,6 +331,7 @@ export async function createOrder(req: { body: unknown }, res: Response) {
         NOW(),
         NOW()
       )
+      ON CONFLICT ("userId") WHERE "promoCode" = 'JK05' AND "userId" IS NOT NULL DO NOTHING
       RETURNING
         "id",
         "fullName",
@@ -276,6 +353,10 @@ export async function createOrder(req: { body: unknown }, res: Response) {
         "updatedAt"
       `;
 
+      if (!createdOrder) {
+        throw new Error("JK05_ALREADY_USED");
+      }
+
       return [createdOrder];
     });
 
@@ -293,6 +374,13 @@ export async function createOrder(req: { body: unknown }, res: Response) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not place order";
+
+    if (message === "JK05_ALREADY_USED") {
+      return res.status(409).json({
+        success: false,
+        message: "JK05 has already been used on this account.",
+      });
+    }
 
     if (/^Only \d+ items left for /.test(message) || message.startsWith("Product not found for item") || message.startsWith("Unable to reserve stock") || message.startsWith("Failed to reserve stock")) {
       return res.status(409).json({
