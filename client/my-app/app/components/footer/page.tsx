@@ -265,7 +265,7 @@ export default function Footer() {
             color: mutedText,
           }}
         >
-          © {new Date().getFullYear()} Just Kiddin. All rights reserved.
+          © {new Date().getFullYear()} Just Kidin. All rights reserved.
         </div>
       </div>
     </footer>

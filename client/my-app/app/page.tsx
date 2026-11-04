@@ -8,9 +8,10 @@ import { useTheme } from "./context/ThemeContext";
 import { products } from "./data/products";
 import Hero from "./components/hero/page";
 
+
 let welcomePromoHandledThisDocument = false;
 
-function WelcomePromoOverlay({ onDismiss }: { onDismiss: () => void }) {
+function WelcomePromoOverlay({ onDismiss, onExplore }: { onDismiss: () => void; onExplore: () => void }) {
   return (
     <div
       className="fixed inset-0 z-[120] flex items-center justify-center bg-[#172437]/65 p-4 backdrop-blur-sm"
@@ -33,7 +34,7 @@ function WelcomePromoOverlay({ onDismiss }: { onDismiss: () => void }) {
         </button>
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#7FA08D]">A little welcome treat</p>
         <h2 id="welcome-promo-title" className="mt-3 text-3xl font-extrabold text-[#293A55]" style={{ fontFamily: "'Quicksand', sans-serif" }}>
-          Welcome to Just Kiddin
+          Welcome to Just Kidin
         </h2>
         <p className="mt-3 text-sm leading-6 text-[#5c5445]">
           New here? Get an extra 10% off your first order with this one-time promo code.
@@ -43,7 +44,7 @@ function WelcomePromoOverlay({ onDismiss }: { onDismiss: () => void }) {
         </div>
         <button
           type="button"
-          onClick={onDismiss}
+          onClick={onExplore}
           className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#293A55] px-7 text-sm font-bold text-white transition-transform hover:scale-[1.02]"
         >
           Start exploring
@@ -81,6 +82,11 @@ export default function Home() {
     setShowWelcomePromo(false);
   };
 
+  const exploreNewArrivals = () => {
+    router.push("/newarrivals");
+    setShowWelcomePromo(false);
+  };
+
   const visibleProducts = useMemo(() => {
     if (!audience) return [];
     return products.filter((item) => item.tags.includes(audience));
@@ -93,7 +99,7 @@ export default function Home() {
           onSelectNewborns={() => router.push("/newborns")}
           onSelectToddlers={() => router.push("/toddlers")}
         />
-        {showWelcomePromo ? <WelcomePromoOverlay onDismiss={dismissWelcomePromo} /> : null}
+        {showWelcomePromo ? <WelcomePromoOverlay onDismiss={dismissWelcomePromo} onExplore={exploreNewArrivals} /> : null}
       </>
     );
   }

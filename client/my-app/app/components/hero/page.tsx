@@ -164,7 +164,7 @@ function HeroBody({ onSelectNewborns, onSelectToddlers }: HeroProps) {
           className="mx-auto mt-4 max-w-md text-base leading-relaxed text-[#293A55] sm:mx-0 sm:mt-6 sm:text-lg"
           style={body}
         >
-          Thoughtfully made clothing for newborns to 5 years, for every little moment.
+          Thoughtfully made clothing for infants to 6 years, for every little moment.
         </p>
 
         {/* Buttons: side by side, left-aligned, equal width */}
@@ -175,7 +175,7 @@ function HeroBody({ onSelectNewborns, onSelectToddlers }: HeroProps) {
             className="flex min-w-[10.5rem] cursor-pointer items-center justify-center gap-2 rounded-full px-7 py-3.5 text-sm font-bold uppercase tracking-wide text-white shadow-md transition-transform hover:scale-105 sm:min-w-[12rem] sm:px-8 sm:py-4 sm:text-base"
             style={{ background: "#E8735F", ...body }}
           >
-            Shop Newborns
+            Shop Infants
             <ArrowIcon className="h-4 w-4 sm:h-5 sm:w-5" />
           </button>
 
