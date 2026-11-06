@@ -1255,7 +1255,7 @@ export default function AdminPage() {
   return (
     <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="rounded-[32px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,250,241,0.98),rgba(255,255,255,0.95))] p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] lg:sticky lg:top-2 lg:h-[calc(100vh-0.5rem)] lg:overflow-hidden">
+        <aside className="rounded-[32px] border border-black/5 bg-[linear-gradient(180deg,rgba(255,250,241,0.98),rgba(255,255,255,0.95))] p-4 shadow-[0_24px_70px_rgba(15,23,42,0.08)] lg:sticky lg:top-2 lg:flex lg:h-[calc(100vh-0.5rem)] lg:flex-col lg:overflow-hidden">
           <div className="rounded-[24px] bg-[#1f2937] p-5 text-white">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1278,7 +1278,7 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <nav className="mt-4 space-y-2">
+          <nav className="mt-4 space-y-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
             {SIDEBAR_ITEMS.map((item) => {
               const active = activeSection === item.id;
 
