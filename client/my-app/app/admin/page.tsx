@@ -50,11 +50,13 @@ const PRODUCT_CATEGORIES = {
     "Knitwears",
     "Sets & suits",
     "Infant essentials",
+    "Overalls",
   ],
   toddler: [
     "Co ords",
     "Sweat shirts",
     "Trousers",
+    "Overalls",
   ],
   accessories: [],
 } as const;

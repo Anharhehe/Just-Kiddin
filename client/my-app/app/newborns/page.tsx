@@ -24,7 +24,7 @@ type Category = {
 const FONT_HEADING = "'Quicksand', sans-serif";
 
 const CATEGORIES: Category[] = [
-  { slug: "rompers", label: "Rompers", image: "/cat1.png" },
+  { slug: "rompers", label: "Rompers", image: "/rompers.png" },
   { slug: "bodysuits", label: "Bodysuits", image: "/cat1.png" },
   { slug: "newborn-starter-sets", label: "Newborn Starter sets", image: "/cat2.png" },
   { slug: "thermals", label: "Thermals", image: "cat3.png" },
@@ -32,6 +32,7 @@ const CATEGORIES: Category[] = [
   { slug: "knitwears", label: "Knitwears", image: "/cat5.png" },
   { slug: "sets-suits", label: "Sets & suits", image: "/cat6.png" },
   { slug: "infant-essentials", label: "infant essentials", image: "/cat7.png" },
+  { slug: "overalls", label: "Overalls", image: "/overalls.jpeg" },
 ];
 
 // Tight, consistent page gutter reused across every section

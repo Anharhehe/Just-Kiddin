@@ -24,9 +24,10 @@ type Category = {
 const FONT_HEADING = "'Quicksand', sans-serif";
 
 const CATEGORIES: Category[] = [
-  { slug: "co-ords", label: "Co ords", image: "/demo.png" },
-  { slug: "sweat-shirts", label: "Sweat shirts", image: "/demo.png" },
-  { slug: "trousers", label: "Trousers", image: "/demo.png" },
+  { slug: "co-ords", label: "Co ords", image: "/coords.jpeg" },
+  { slug: "sweat-shirts", label: "Sweat shirts", image: "/sweatshirts.jpeg" },
+  { slug: "trousers", label: "Trousers", image: "/trousers.png" },
+  { slug: "overalls", label: "Overalls", image: "/overalls.jpeg" },
 ];
 
 // Tight, consistent page gutter reused across every section
