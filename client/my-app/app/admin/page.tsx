@@ -500,6 +500,8 @@ export default function AdminPage() {
   const [orderToDate, setOrderToDate] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
+  const [existingProductImages, setExistingProductImages] = useState<ProductImage[]>([]);
+  const [deletingProductImageIds, setDeletingProductImageIds] = useState<Set<string>>(new Set());
   const [colorImageDrafts, setColorImageDrafts] = useState<ColorImageDraft[]>([]);
   const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
   const [reviewForm, setReviewForm] = useState<ReviewFormState>(emptyReviewForm);
@@ -767,8 +769,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!selectedProduct) {
+      setExistingProductImages([]);
       return;
     }
+    setExistingProductImages(selectedProduct.images ?? []);
     const rawTable = (selectedProduct as any).tableDescription;
     const normalizedTable = Array.isArray(rawTable)
       ? // ensure exactly 5 entries
@@ -830,6 +834,7 @@ export default function AdminPage() {
 
   function startNewProduct() {
     setSelectedProductId(null);
+    setExistingProductImages([]);
     setForm({ ...emptyForm, category: getCategories(emptyForm.ageGroup)[0] ?? null, gender: "boy" });
     setColorPickerValue("#111827");
     setColorImageDrafts([]);
@@ -930,6 +935,49 @@ export default function AdminPage() {
 
     if (colorImageInputRef.current) {
       colorImageInputRef.current.value = "";
+    }
+  }
+
+  function removeColorDraftImage(draftImageId: string) {
+    setColorImageDrafts((current) => {
+      const draftImage = current.find((draft) => draft.id === draftImageId);
+      if (draftImage) {
+        URL.revokeObjectURL(draftImage.previewUrl);
+      }
+
+      return current.filter((draft) => draft.id !== draftImageId);
+    });
+  }
+
+  async function deleteProductImage(image: ProductImage) {
+    const productId = selectedProductId;
+    if (!productId || !window.confirm("Delete this product image?")) {
+      return;
+    }
+
+    setDeletingProductImageIds((current) => new Set(current).add(image.id));
+    setNotice(null);
+
+    try {
+      const response = await apiFetch(`/admin/products/${productId}/images/${image.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.message || "Failed to delete product image");
+      }
+
+      setExistingProductImages((current) => current.filter((currentImage) => currentImage.id !== image.id));
+      setNotice("Product image deleted successfully");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Failed to delete product image");
+    } finally {
+      setDeletingProductImageIds((current) => {
+        const next = new Set(current);
+        next.delete(image.id);
+        return next;
+      });
     }
   }
 
@@ -1824,6 +1872,46 @@ export default function AdminPage() {
                       </div>
                     </Field>
                   ) : null}
+                  {selectedProductId ? (
+                    <Field label="Product images" className="md:col-span-2">
+                      {existingProductImages.length > 0 ? (
+                        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {existingProductImages.map((image) => {
+                            const deleting = deletingProductImageIds.has(image.id);
+
+                            return (
+                              <article key={image.id} className="relative overflow-hidden rounded-2xl border border-black/10 bg-white shadow-sm">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={image.url} alt={image.altText || form.name} className="h-40 w-full object-cover" />
+                                {image.type === "PRIMARY" ? (
+                                  <span className="absolute left-2 top-2 rounded-full bg-[#1f2937]/90 px-2.5 py-1 text-xs font-semibold text-white">
+                                    Primary
+                                  </span>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => void deleteProductImage(image)}
+                                  disabled={deleting || savingProduct}
+                                  aria-label={`Delete image ${image.altText || image.id}`}
+                                  className="absolute right-2 top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/95 text-[#b91c1c] shadow transition hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-60"
+                                  title="Delete image"
+                                >
+                                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                </button>
+                                <div className="truncate px-3 py-2 text-xs text-[var(--muted)]">
+                                  {image.altText || "Product image"}
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="rounded-2xl border border-dashed border-black/10 bg-[#fffaf2] p-4 text-sm text-[var(--muted)]">
+                          No images have been uploaded for this product yet.
+                        </p>
+                      )}
+                    </Field>
+                  ) : null}
                   <Field label="Colors" className="md:col-span-2">
                     <div className="space-y-4 rounded-3xl border border-black/5 bg-[#fffaf2] p-4">
                       <div className="flex flex-wrap items-center gap-3">
@@ -1885,8 +1973,19 @@ export default function AdminPage() {
                                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                                       {draftsForColor.map((draftImage) => (
                                         <article key={draftImage.id} className="overflow-hidden rounded-2xl border border-black/5 bg-[#fffaf2] shadow-sm">
-                                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                                          <img src={draftImage.previewUrl} alt={`${color} preview`} className="h-36 w-full object-cover" />
+                                          <div className="relative">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={draftImage.previewUrl} alt={`${color} preview`} className="h-36 w-full object-cover" />
+                                            <button
+                                              type="button"
+                                              onClick={() => removeColorDraftImage(draftImage.id)}
+                                              aria-label={`Remove ${draftImage.file.name} from upload`}
+                                              className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-[#b91c1c] shadow transition hover:bg-[#fff5f5]"
+                                              title="Remove image"
+                                            >
+                                              <X className="h-4 w-4" />
+                                            </button>
+                                          </div>
                                           <div className="p-3">
                                             <p className="truncate text-sm font-semibold text-[var(--foreground)]">{draftImage.file.name}</p>
                                             <p className="mt-1 text-xs text-[var(--muted)]">Linked to {formatColorLabel(color)}</p>

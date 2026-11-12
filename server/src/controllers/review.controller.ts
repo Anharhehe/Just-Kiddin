@@ -67,15 +67,18 @@ export async function createReview(req: AuthenticatedRequest, res: Response) {
     });
   }
 
+  const productId = parsed.data.productId?.trim() || null;
+
   if (!req.user?.id) {
-    return res.status(401).json({
+    return res.status(productId ? 403 : 401).json({
       success: false,
-      message: "Sign in and place an order before leaving a review.",
+      message: productId
+        ? "Place an order for this product before you can leave a review."
+        : "Sign in and place an order before leaving a review.",
     });
   }
 
   try {
-    const productId = parsed.data.productId?.trim() || null;
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: { id: true, fullName: true, email: true },
