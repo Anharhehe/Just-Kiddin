@@ -488,7 +488,7 @@ export default function CheckoutPage() {
 						{items.map((item) => (
 							<div key={item.cartItemId} className="flex items-center gap-3 rounded-2xl bg-white p-3">
 								<div className="relative h-16 w-16 overflow-hidden rounded-xl bg-[#f8f5ef]">
-									<Image src={item.image} alt={item.name} fill className="object-cover" sizes="64px" />
+									<Image src={item.image} alt={item.name} fill className="object-cover" sizes="64px" unoptimized />
 								</div>
 								<div className="min-w-0 flex-1">
 									<p className="truncate text-sm font-semibold text-[#0F2540]">{item.name}</p>
@@ -541,7 +541,7 @@ export default function CheckoutPage() {
 								{accessoryProducts.map((product) => (
 									<Link key={product.id} href={`/products/${product.id}`} className="flex items-center gap-3 rounded-2xl border border-[#f0e6d7] bg-[#fffdf8] p-3 transition hover:border-[#ff7d6b]/40 hover:shadow-sm">
 										<div className="relative h-14 w-14 overflow-hidden rounded-xl bg-[#f8f5ef]">
-											<Image src={getProductImage(product)} alt={product.name} fill className="object-cover" sizes="56px" />
+											<Image src={getProductImage(product)} alt={product.name} fill className="object-cover" sizes="56px" unoptimized />
 										</div>
 										<div className="min-w-0 flex-1">
 											<p className="truncate text-sm font-semibold text-[#0F2540]">{product.name}</p>

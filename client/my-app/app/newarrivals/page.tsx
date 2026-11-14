@@ -254,6 +254,7 @@ export default function NewArrivalPage() {
                       fill
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
                       sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 16vw"
+                      unoptimized
                     />
 
                     {product.discountPercent ? (

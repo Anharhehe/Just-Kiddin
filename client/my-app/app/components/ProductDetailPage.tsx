@@ -614,6 +614,7 @@ export default function ProductDetailPage({
                 className="object-cover"
                 sizes="(max-width: 1024px) 90vw, 24rem"
                 priority
+                unoptimized
               />
               {!product.inStock && (
                 <span className="absolute left-4 top-4 z-10 rounded-full bg-[#B66A3C] px-2.5 py-1 text-[11px] font-semibold text-white">
@@ -662,7 +663,7 @@ export default function ProductDetailPage({
                         : "border-transparent opacity-70 hover:opacity-100"
                     }`}
                   >
-                    <Image src={img} alt={`${product.name} ${idx + 1}`} fill className="object-cover" sizes="56px" />
+                    <Image src={img} alt={`${product.name} ${idx + 1}`} fill className="object-cover" sizes="56px" unoptimized />
                   </button>
                 ))}
               </div>
@@ -1059,6 +1060,7 @@ export default function ProductDetailPage({
                       fill
                       className="object-cover"
                       sizes="25vw"
+                      unoptimized
                     />
                   </div>
                   <div className="p-2.5">

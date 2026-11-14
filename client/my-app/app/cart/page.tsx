@@ -65,7 +65,7 @@ export default function CartPage() {
             return (
               <article key={item.cartItemId} className="flex flex-col gap-4 rounded-[1.75rem] border border-[#e3dccb] bg-white p-4 shadow-[0_12px_36px_rgba(0,0,0,0.08)] sm:flex-row sm:items-center">
                 <div className="relative h-28 w-full overflow-hidden rounded-2xl bg-[#f8f5ef] sm:h-28 sm:w-28 sm:flex-shrink-0">
-                  <Image src={item.image} alt={item.name} fill className="object-cover" sizes="112px" />
+                  <Image src={item.image} alt={item.name} fill className="object-cover" sizes="112px" unoptimized />
                 </div>
 
                 <div className="flex-1">
