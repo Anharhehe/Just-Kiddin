@@ -14,8 +14,8 @@ const orderItemSchema = z.object({
   price: z.number().int().positive(),
   image: z.string().min(1),
   quantity: z.number().int().min(1).max(99),
-  size: z.string().min(1),
-  color: z.string().min(1),
+  size: z.string(),
+  color: z.string(),
   category: z.string().min(1),
   ageGroup: z.enum(["newborn", "toddler", "accessories"]),
   gender: z.enum(["boy", "girl", "unisex"]).nullable(),
@@ -30,6 +30,11 @@ type VariantStockEntry = {
 
 function normalizeKey(value: string | null | undefined) {
   return value?.trim().toLowerCase() ?? "";
+}
+
+function normalizeColorKey(value: string | null | undefined) {
+  const normalized = normalizeKey(value);
+  return normalized === "default" ? "" : normalized;
 }
 
 function normalizeVariantStock(value: unknown): VariantStockEntry[] {
@@ -198,12 +203,16 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
           stockQuantity: number;
           name: string;
           variantStock: unknown;
+          sizes: string[];
+          colors: string[];
         }>>`
           SELECT
             "id",
             "stockQuantity",
             "name",
-            "variantStock"
+            "variantStock",
+            "sizes",
+            "colors"
           FROM "Product"
           WHERE "id" = ${productId}
           LIMIT 1
@@ -221,8 +230,17 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
 
           for (const item of productItems) {
             const sizeKey = normalizeKey(item.size);
-            const colorKey = normalizeKey(item.color);
-            const match = nextVariantStock.find((entry) => normalizeKey(entry.size) === sizeKey && normalizeKey(entry.color) === colorKey);
+            const colorKey = normalizeColorKey(item.color);
+            let match = nextVariantStock.find((entry) => normalizeKey(entry.size) === sizeKey && normalizeColorKey(entry.color) === colorKey);
+
+            if (
+              !match
+              && product.sizes.length === 0
+              && product.colors.length <= 1
+              && nextVariantStock.length === 1
+            ) {
+              match = nextVariantStock[0];
+            }
 
             if (!match) {
               throw new Error(`Variant not found for ${product.name}`);
@@ -382,7 +400,7 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
       });
     }
 
-    if (/^Only \d+ items left for /.test(message) || message.startsWith("Product not found for item") || message.startsWith("Unable to reserve stock") || message.startsWith("Failed to reserve stock")) {
+    if (/^Only \d+ items left for /.test(message) || message.startsWith("Product not found for item") || message.startsWith("Variant not found for ") || message.startsWith("Unable to reserve stock") || message.startsWith("Failed to reserve stock")) {
       return res.status(409).json({
         success: false,
         message,

@@ -75,9 +75,13 @@ export default function CartPage() {
                       <h2 className="mt-1 text-xl font-bold text-[#0F2540]" style={{ fontFamily: FONT_HEADING }}>
                         {item.name}
                       </h2>
-                      <p className="mt-1 text-sm text-[#7A6F5D]">
-                        Size: {item.size} · Color: {item.color}
-                      </p>
+                      {item.size || item.color ? (
+                        <p className="mt-1 text-sm text-[#7A6F5D]">
+                          {item.size ? `Size: ${item.size}` : ""}
+                          {item.size && item.color ? " · " : ""}
+                          {item.color ? `Color: ${item.color}` : ""}
+                        </p>
+                      ) : null}
                     </div>
                     <button
                       type="button"

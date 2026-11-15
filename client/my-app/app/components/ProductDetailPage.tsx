@@ -314,7 +314,7 @@ export default function ProductDetailPage({
 
 
   const handleAddToCart = () => {
-    if (!selectedSize) {
+    if (product.sizes.length > 0 && !selectedSize) {
       setActionMessage("Please choose a size before adding this item to cart.");
       return;
     }
@@ -327,8 +327,8 @@ export default function ProductDetailPage({
     addItem({
       product,
       quantity,
-      size: selectedSize,
-      color: selectedColor ?? "Default",
+      size: selectedSize ?? "",
+      color: selectedColor ?? "",
     });
     setActionMessage("Added to cart.");
   };
@@ -346,7 +346,7 @@ export default function ProductDetailPage({
   };
 
   const handleBuyNow = () => {
-    if (!selectedSize) {
+    if (product.sizes.length > 0 && !selectedSize) {
       setActionMessage("Please choose a size before checking out.");
       return;
     }
@@ -359,8 +359,8 @@ export default function ProductDetailPage({
     addItem({
       product,
       quantity,
-      size: selectedSize,
-      color: selectedColor ?? "Default",
+      size: selectedSize ?? "",
+      color: selectedColor ?? "",
     });
     router.push("/checkout");
   };

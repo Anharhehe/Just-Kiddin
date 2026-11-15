@@ -26,6 +26,7 @@ const FORMSPREE_ENDPOINT = "https://formspree.io/f/maewplde";
 const DELIVERY_CHARGE = 300;
 const FREE_DELIVERY_THRESHOLD = 3000;
 const FONT_HEADING = "'Quicksand', sans-serif";
+const ORDER_CONFIRMATION_STORAGE_KEY = "jk-order-confirmation";
 
 const PROMO_CODES = ["JK05"];
 
@@ -297,7 +298,17 @@ export default function CheckoutPage() {
 			});
 
 			const payload = (await response.json().catch(() => null)) as
-				| { success?: boolean; message?: string; data?: { orderId?: string } }
+				| {
+						success?: boolean;
+						message?: string;
+						data?: {
+							orderId?: string;
+							subtotal?: number;
+							discountAmount?: number;
+							deliveryCharge?: number;
+							totalAmount?: number;
+						};
+				  }
 				| null;
 
 			if (!response.ok || !payload?.success || !payload.data?.orderId) {
@@ -305,6 +316,20 @@ export default function CheckoutPage() {
 			}
 
 			const orderId = payload.data.orderId;
+			const confirmation = {
+				orderId,
+				items: items.map(({ name, quantity, price, size, color }) => ({ name, quantity, price, size, color })),
+				subtotal: payload.data.subtotal ?? subtotal,
+				discountAmount: payload.data.discountAmount ?? discountAmount,
+				deliveryCharge: payload.data.deliveryCharge ?? deliveryCharge,
+				totalAmount: payload.data.totalAmount ?? totalAmount,
+			};
+
+			try {
+				window.sessionStorage.setItem(ORDER_CONFIRMATION_STORAGE_KEY, JSON.stringify(confirmation));
+			} catch (error) {
+				console.error("Could not save order confirmation details:", error);
+			}
 
 			void fetch(FORMSPREE_ENDPOINT, {
 				method: "POST",
@@ -321,7 +346,7 @@ export default function CheckoutPage() {
 					address: `${form.address}, ${form.city} ${form.postalCode}`.trim(),
 					notes: form.notes,
 					items: items
-						.map((item) => `${item.name} (Size ${item.size}) x${item.quantity} - ${formatCurrency(item.price * item.quantity)}`)
+						.map((item) => `${item.name}${item.size ? ` (Size ${item.size})` : ""} x${item.quantity} - ${formatCurrency(item.price * item.quantity)}`)
 						.join("\n"),
 					promoCode: promoCode || "None",
 					subtotal: formatCurrency(subtotal),
@@ -492,7 +517,9 @@ export default function CheckoutPage() {
 								</div>
 								<div className="min-w-0 flex-1">
 									<p className="truncate text-sm font-semibold text-[#0F2540]">{item.name}</p>
-									<p className="text-xs text-[#7A6F5D]">Size {item.size} · Qty {item.quantity}</p>
+									<p className="text-xs text-[#7A6F5D]">
+										{item.size ? `Size ${item.size} · ` : ""}Qty {item.quantity}
+									</p>
 								</div>
 								<p className="text-sm font-semibold text-[#0F2540]">{formatCurrency(item.price * item.quantity)}</p>
 							</div>
