@@ -53,29 +53,6 @@ function normalizeColorValue(value: string) {
   return isHexColor(value) ? value.toUpperCase() : value.trim();
 }
 
-function normalizeVariantToken(value: string | null | undefined) {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-function getVariantQuantity(
-  entries: Array<{ size?: string | null; color?: string | null; quantity: number }> | undefined,
-  size: string | null,
-  color: string | null
-) {
-  if (!entries || entries.length === 0) {
-    return null;
-  }
-
-  const normalizedSize = normalizeVariantToken(size);
-  const normalizedColor = normalizeVariantToken(color);
-
-  const match = entries.find((entry) => {
-    return normalizeVariantToken(entry.size) === normalizedSize && normalizeVariantToken(entry.color) === normalizedColor;
-  });
-
-  return match?.quantity ?? null;
-}
-
 function gendersMatch(a: string | null | undefined, b: string | null | undefined) {
   const A = (a ?? "").toLowerCase();
   const B = (b ?? "").toLowerCase();
@@ -128,7 +105,6 @@ export default function ProductDetailPage({
   const router = useRouter();
   const galleryImages = getProductGallery(product);
   const productImageEntries = product.images ?? [];
-  const variantStockEntries = product.variantStock ?? [];
 
   // product.colors is a plain string array (e.g. "Blue", "White") — CSS understands these names directly
   const availableColors = product.colors ?? [];
@@ -213,16 +189,6 @@ export default function ProductDetailPage({
 
   const visibleReviews = useMemo(() => reviews.slice(0, 6), [reviews]);
   const hiddenReviews = useMemo(() => reviews.slice(6), [reviews]);
-
-  const selectedVariantQuantity = useMemo(() => {
-    const quantity = getVariantQuantity(variantStockEntries, selectedSize, selectedColor);
-
-    if (quantity !== null) {
-      return quantity;
-    }
-
-    return product.inStock ? Number.MAX_SAFE_INTEGER : 0;
-  }, [product.inStock, selectedColor, selectedSize, variantStockEntries]);
 
   useEffect(() => {
     const nextColor = imageColors[activeImage];
@@ -319,11 +285,6 @@ export default function ProductDetailPage({
       return;
     }
 
-    if (selectedVariantQuantity < quantity) {
-      setActionMessage(`Only ${selectedVariantQuantity} left for the selected size and color.`);
-      return;
-    }
-
     addItem({
       product,
       quantity,
@@ -348,11 +309,6 @@ export default function ProductDetailPage({
   const handleBuyNow = () => {
     if (product.sizes.length > 0 && !selectedSize) {
       setActionMessage("Please choose a size before checking out.");
-      return;
-    }
-
-    if (selectedVariantQuantity < quantity) {
-      setActionMessage(`Only ${selectedVariantQuantity} left for the selected size and color.`);
       return;
     }
 
@@ -616,12 +572,6 @@ export default function ProductDetailPage({
                 priority
                 unoptimized
               />
-              {!product.inStock && (
-                <span className="absolute left-4 top-4 z-10 rounded-full bg-[#B66A3C] px-2.5 py-1 text-[11px] font-semibold text-white">
-                  Out of Stock
-                </span>
-              )}
-
               {/* arrows — shown on desktop and mobile */}
               {galleryImages.length > 1 && (
                 <>
@@ -827,16 +777,6 @@ export default function ProductDetailPage({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${selectedVariantQuantity > 0 ? "bg-[#7FA08D]" : "bg-red-400"}`} />
-                <span className="text-xs text-[#6B7280]">
-                  {selectedVariantQuantity > 0
-                    ? selectedVariantQuantity === Number.MAX_SAFE_INTEGER
-                      ? "In Stock"
-                      : `${selectedVariantQuantity} left for selected variant`
-                    : "Currently unavailable for selected variant"}
-                </span>
-              </div>
             </div>
           </div>
             <div className="mx-auto w-full max-w-xs xl:sticky xl:top-6">
@@ -888,7 +828,6 @@ export default function ProductDetailPage({
                 <div className="flex items-stretch gap-2.5">
                   <button
                     type="button"
-                    disabled={!product.inStock}
                     onClick={handleAddToCart}
                     className="flex h-14 flex-1 items-center justify-center gap-2 rounded-full border border-[#D8CCBC] bg-white px-4 text-sm font-bold text-[#3d372c] transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                     style={{ fontFamily: FONT_HEADING }}
@@ -914,7 +853,6 @@ export default function ProductDetailPage({
 
                 <button
                   type="button"
-                  disabled={!product.inStock}
                   onClick={handleBuyNow}
                   className="flex h-14 w-full items-center justify-center gap-2 rounded-full px-4 text-base font-bold text-white transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
                   style={{ background: "#7FA08D", fontFamily: FONT_HEADING }}

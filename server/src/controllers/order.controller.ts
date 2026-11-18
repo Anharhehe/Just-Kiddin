@@ -22,43 +22,6 @@ const orderItemSchema = z.object({
   inStock: z.boolean(),
 });
 
-type VariantStockEntry = {
-  size: string | null;
-  color: string | null;
-  quantity: number;
-};
-
-function normalizeKey(value: string | null | undefined) {
-  return value?.trim().toLowerCase() ?? "";
-}
-
-function normalizeColorKey(value: string | null | undefined) {
-  const normalized = normalizeKey(value);
-  return normalized === "default" ? "" : normalized;
-}
-
-function normalizeVariantStock(value: unknown): VariantStockEntry[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value
-    .map((entry) => {
-      if (!entry || typeof entry !== "object") {
-        return null;
-      }
-
-      const typedEntry = entry as { size?: unknown; color?: unknown; quantity?: unknown };
-
-      return {
-        size: typeof typedEntry.size === "string" && typedEntry.size.trim().length > 0 ? typedEntry.size : null,
-        color: typeof typedEntry.color === "string" && typedEntry.color.trim().length > 0 ? typedEntry.color : null,
-        quantity: typeof typedEntry.quantity === "number" ? typedEntry.quantity : Number(typedEntry.quantity) || 0,
-      };
-    })
-    .filter((entry): entry is VariantStockEntry => Boolean(entry));
-}
-
 const createOrderSchema = z.object({
   customer: z.object({
     fullName: z.string().trim().min(2, "Full name is required").max(120),
@@ -169,18 +132,6 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
   const orderId = randomUUID();
   const itemsJson = JSON.stringify(parsed.data.items);
 
-  const itemsByProduct = parsed.data.items.reduce<Map<string, number>>((groupedItems, item) => {
-    groupedItems.set(item.productId, (groupedItems.get(item.productId) ?? 0) + item.quantity);
-    return groupedItems;
-  }, new Map());
-
-  const itemsByProductDetail = parsed.data.items.reduce<Map<string, typeof parsed.data.items>>((groupedItems, item) => {
-    const bucket = groupedItems.get(item.productId) ?? [];
-    bucket.push(item);
-    groupedItems.set(item.productId, bucket);
-    return groupedItems;
-  }, new Map());
-
   try {
     const [order] = await prisma.$transaction(async (tx) => {
       if (hasPromo) {
@@ -194,97 +145,6 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
 
         if (previousRedemption) {
           throw new Error("JK05_ALREADY_USED");
-        }
-      }
-
-      for (const [productId, quantity] of itemsByProduct.entries()) {
-        const [product] = await tx.$queryRaw<Array<{
-          id: string;
-          stockQuantity: number;
-          name: string;
-          variantStock: unknown;
-          sizes: string[];
-          colors: string[];
-        }>>`
-          SELECT
-            "id",
-            "stockQuantity",
-            "name",
-            "variantStock",
-            "sizes",
-            "colors"
-          FROM "Product"
-          WHERE "id" = ${productId}
-          LIMIT 1
-        `;
-
-        if (!product) {
-          throw new Error(`Product not found for item ${productId}`);
-        }
-
-        const productItems = itemsByProductDetail.get(productId) ?? [];
-        const variantStock = normalizeVariantStock(product.variantStock);
-
-        if (variantStock.length > 0) {
-          const nextVariantStock = variantStock.map((entry) => ({ ...entry }));
-
-          for (const item of productItems) {
-            const sizeKey = normalizeKey(item.size);
-            const colorKey = normalizeColorKey(item.color);
-            let match = nextVariantStock.find((entry) => normalizeKey(entry.size) === sizeKey && normalizeColorKey(entry.color) === colorKey);
-
-            if (
-              !match
-              && product.sizes.length === 0
-              && product.colors.length <= 1
-              && nextVariantStock.length === 1
-            ) {
-              match = nextVariantStock[0];
-            }
-
-            if (!match) {
-              throw new Error(`Variant not found for ${product.name}`);
-            }
-
-            if (match.quantity < item.quantity) {
-              throw new Error(`Only ${match.quantity} items left for ${product.name}`);
-            }
-
-            match.quantity -= item.quantity;
-          }
-
-          const nextStockQuantity = nextVariantStock.reduce((sum, entry) => sum + entry.quantity, 0);
-
-          await tx.product.update({
-            where: { id: productId },
-            data: {
-              variantStock: nextVariantStock as never,
-              stockQuantity: nextStockQuantity,
-            },
-          });
-          continue;
-        }
-
-        if (product.stockQuantity < quantity) {
-          throw new Error(`Only ${product.stockQuantity} items left for ${product.name}`);
-        }
-
-        const updatedRows = await tx.product.updateMany({
-          where: {
-            id: productId,
-            stockQuantity: {
-              gte: quantity,
-            },
-          },
-          data: {
-            stockQuantity: {
-              decrement: quantity,
-            },
-          },
-        });
-
-        if (updatedRows.count !== 1) {
-          throw new Error(`Unable to reserve stock for ${product.name}`);
         }
       }
 
@@ -397,13 +257,6 @@ export async function createOrder(req: AuthenticatedRequest, res: Response) {
       return res.status(409).json({
         success: false,
         message: "JK05 has already been used on this account.",
-      });
-    }
-
-    if (/^Only \d+ items left for /.test(message) || message.startsWith("Product not found for item") || message.startsWith("Variant not found for ") || message.startsWith("Unable to reserve stock") || message.startsWith("Failed to reserve stock")) {
-      return res.status(409).json({
-        success: false,
-        message,
       });
     }
 
